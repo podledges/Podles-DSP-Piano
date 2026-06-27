@@ -59,21 +59,36 @@ function flattenScore(score) {
 
     score.pages.forEach((page, pagePosition) => {
         let pageEventCount = 0;
-        page.bars.forEach((bar, barPosition) => {
-            bar.events.forEach((event, eventPosition) => {
+        if (Array.isArray(page.bars) && page.bars.length > 0) {
+            page.bars.forEach((bar, barPosition) => {
+                bar.events.forEach((event, eventPosition) => {
+                    flatEvents.push({
+                        absoluteIndex: flatEvents.length,
+                        pagePosition,
+                        barPosition,
+                        eventPosition,
+                        page,
+                        bar,
+                        event
+                    });
+                    pageEventCount += 1;
+                });
+                barTotals.set(bar.barId, bar.events.length);
+            });
+        } else if (Array.isArray(page.events) && page.events.length > 0) {
+            page.events.forEach((event, eventPosition) => {
                 flatEvents.push({
                     absoluteIndex: flatEvents.length,
                     pagePosition,
-                    barPosition,
+                    barPosition: null,
                     eventPosition,
                     page,
-                    bar,
+                    bar: null,
                     event
                 });
                 pageEventCount += 1;
             });
-            barTotals.set(bar.barId, bar.events.length);
-        });
+        }
         pageTotals[pagePosition] = pageEventCount;
     });
 
@@ -86,16 +101,32 @@ function validateScore(score) {
     }
 
     for (const page of score.pages) {
-        if (!isObject(page) || !Array.isArray(page.bars) || page.bars.length === 0) {
-            return "each page must contain bars";
+        if (!isObject(page)) {
+            return "each page must be an object";
         }
 
-        for (const bar of page.bars) {
-            if (!isObject(bar) || !Array.isArray(bar.events) || bar.events.length === 0) {
-                return "each bar must contain events";
-            }
+        const hasBars = Array.isArray(page.bars) && page.bars.length > 0;
+        const hasPageEvents = Array.isArray(page.events) && page.events.length > 0;
+        if (!hasBars && !hasPageEvents) {
+            return "each page must contain bars or page-level events";
+        }
 
-            for (const event of bar.events) {
+        if (hasBars) {
+            for (const bar of page.bars) {
+                if (!isObject(bar) || !Array.isArray(bar.events) || bar.events.length === 0) {
+                    return "each bar must contain events";
+                }
+
+                for (const event of bar.events) {
+                    if (!isObject(event) || normaliseMidiSet(event.midi).length === 0) {
+                        return "each event must contain at least one MIDI note";
+                    }
+                }
+            }
+        }
+
+        if (hasPageEvents) {
+            for (const event of page.events) {
                 if (!isObject(event) || normaliseMidiSet(event.midi).length === 0) {
                     return "each event must contain at least one MIDI note";
                 }
@@ -161,8 +192,8 @@ class FullScoreProgressTracker {
             reason,
             currentPageIndex: current.page.pageIndex,
             currentPageId: current.page.pageId,
-            currentBarIndex: current.bar.barIndex,
-            currentBarId: current.bar.barId,
+            currentBarIndex: current.bar ? current.bar.barIndex : null,
+            currentBarId: current.bar ? current.bar.barId : null,
             currentExpectedEventIndex: current.event.eventIndex,
             currentExpectedEventId: current.event.eventId,
             completedEvents: this.completedEvents,
@@ -268,7 +299,7 @@ class FullScoreProgressTracker {
         });
 
         const currentBarStart = this.findCurrentBarStartIndex();
-        if (this.nextEventIndex > currentBarStart) {
+        if (currentBarStart !== null && this.nextEventIndex > currentBarStart) {
             candidates.push({
                 kind: "current_bar_restart",
                 index: currentBarStart,
@@ -344,22 +375,24 @@ class FullScoreProgressTracker {
         const completedRange = this.flatEvents.slice(previousIndex, nextIndex);
 
         completedRange.forEach((item) => {
-            const isBarComplete = this.nextEventIndex >= this.findBarEndIndex(item.bar.barId);
-            if (isBarComplete && !this.emittedBarIds.has(item.bar.barId)) {
-                this.emittedBarIds.add(item.bar.barId);
-                this.completedBarIds.add(item.bar.barId);
-                events.push({
-                    type: "BAR_COMPLETED",
-                    scoreId: this.score.scoreId,
-                    pageIndex: item.page.pageIndex,
-                    pageId: item.page.pageId,
-                    barIndex: item.bar.barIndex,
-                    barId: item.bar.barId,
-                    completedEvents: this.completedEvents,
-                    totalEvents: this.flatEvents.length,
-                    confidence: this.calculateConfidence(),
-                    timestampMs
-                });
+            if (item.bar) {
+                const isBarComplete = this.nextEventIndex >= this.findBarEndIndex(item.bar.barId);
+                if (isBarComplete && !this.emittedBarIds.has(item.bar.barId)) {
+                    this.emittedBarIds.add(item.bar.barId);
+                    this.completedBarIds.add(item.bar.barId);
+                    events.push({
+                        type: "BAR_COMPLETED",
+                        scoreId: this.score.scoreId,
+                        pageIndex: item.page.pageIndex,
+                        pageId: item.page.pageId,
+                        barIndex: item.bar.barIndex,
+                        barId: item.bar.barId,
+                        completedEvents: this.completedEvents,
+                        totalEvents: this.flatEvents.length,
+                        confidence: this.calculateConfidence(),
+                        timestampMs
+                    });
+                }
             }
 
             const isPageComplete = this.nextEventIndex >= this.findPageEndIndex(item.page.pageId);
@@ -402,6 +435,9 @@ class FullScoreProgressTracker {
 
     findCurrentBarStartIndex() {
         const current = this.flatEvents[Math.min(this.nextEventIndex, this.flatEvents.length - 1)];
+        if (!current.bar) {
+            return null;
+        }
         return this.flatEvents.findIndex((item) => item.bar.barId === current.bar.barId);
     }
 
@@ -413,7 +449,7 @@ class FullScoreProgressTracker {
     findBarEndIndex(barId) {
         let lastIndex = -1;
         this.flatEvents.forEach((item, index) => {
-            if (item.bar.barId === barId) {
+            if (item.bar && item.bar.barId === barId) {
                 lastIndex = index;
             }
         });

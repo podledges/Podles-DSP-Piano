@@ -1,0 +1,57 @@
+{
+  "songTitle": "fur_elise.pdf",
+  "totalPages": 3,
+  "pages": [
+    {
+      "pageNumber": 1,
+      "duration": 6,
+      "notes": [
+        { "time": 0, "note": "E5", "dur": 0.25, "hand": "right" },
+        { "time": 0.25, "note": "D#5", "dur": 0.25, "hand": "right" },
+        { "time": 0.5, "note": "E5", "dur": 0.25, "hand": "right" },
+        { "time": 0.75, "note": "D#5", "dur": 0.25, "hand": "right" },
+        { "time": 1, "note": "E5", "dur": 0.25, "hand": "right" },
+        { "time": 1.25, "note": "B4", "dur": 0.25, "hand": "right" },
+        { "time": 1.5, "note": "D5", "dur": 0.25, "hand": "right" },
+        { "time": 1.75, "note": "C5", "dur": 0.25, "hand": "right" },
+        { "time": 2, "note": "A4", "dur": 0.5, "hand": "right" },
+        { "time": 2, "note": "A2", "dur": 0.5, "hand": "left" },
+        { "time": 2.3, "note": "E3", "dur": 0.5, "hand": "left" },
+        { "time": 2.6, "note": "A3", "dur": 0.5, "hand": "left" },
+        { "time": 2.9, "note": "C4", "dur": 0.25, "hand": "right" },
+        { "time": 3.15, "note": "E4", "dur": 0.25, "hand": "right" },
+        { "time": 3.4, "note": "A4", "dur": 0.25, "hand": "right" },
+        { "time": 3.65, "note": "B4", "dur": 0.5, "hand": "right" },
+        { "time": 3.65, "note": "E2", "dur": 0.5, "hand": "left" },
+        { "time": 3.95, "note": "E3", "dur": 0.5, "hand": "left" },
+        { "time": 4.25, "note": "G#3", "dur": 0.5, "hand": "left" }
+      ]
+    },
+    {
+      "pageNumber": 2,
+      "duration": 6,
+      "notes": [
+        { "time": 0, "note": "E4", "dur": 0.25, "hand": "right" },
+        { "time": 0.25, "note": "G#4", "dur": 0.25, "hand": "right" },
+        { "time": 0.5, "note": "B4", "dur": 0.25, "hand": "right" },
+        { "time": 0.75, "note": "C5", "dur": 0.5, "hand": "right" },
+        { "time": 0.75, "note": "A2", "dur": 0.5, "hand": "left" },
+        { "time": 1.05, "note": "E3", "dur": 0.5, "hand": "left" },
+        { "time": 1.35, "note": "A3", "dur": 0.5, "hand": "left" }
+      ]
+    },
+    {
+      "pageNumber": 3,
+      "duration": 6,
+      "notes": [
+        { "time": 0, "note": "E4", "dur": 0.25, "hand": "right" },
+        { "time": 0.25, "note": "G#4", "dur": 0.25, "hand": "right" },
+        { "time": 0.5, "note": "B4", "dur": 0.25, "hand": "right" },
+        { "time": 0.75, "note": "C5", "dur": 0.5, "hand": "right" },
+        { "time": 0.75, "note": "A2", "dur": 0.5, "hand": "left" },
+        { "time": 1.05, "note": "E3", "dur": 0.5, "hand": "left" },
+        { "time": 1.35, "note": "A3", "dur": 0.5, "hand": "left" }
+      ]
+    }
+  ]
+}

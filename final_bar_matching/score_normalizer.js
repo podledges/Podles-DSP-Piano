@@ -148,9 +148,13 @@ function normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTo
         });
     });
 
+    const groupingTargetId = context.barId ?? context.pageId;
+    const generatedFrom = context.generatedFrom ?? "bar.notes";
+    const eventPrefix = context.eventPrefix ?? groupingTargetId;
+
     const grouped = parseScoreNotes({ notes: convertedNotes }, {
         groupingTolerance,
-        targetId: context.barId
+        targetId: groupingTargetId
     });
 
     if (!grouped.ok) {
@@ -161,7 +165,7 @@ function normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTo
 
     warnings.push(...grouped.warnings);
     return grouped.events.map((event, eventIndex) => {
-        const eventId = makeGeneratedId(context.barId, "event", eventIndex + 1);
+        const eventId = makeGeneratedId(eventPrefix, "event", eventIndex + 1);
         const eventNotes = event.sourceNotes.map((sourceNote, noteIndex) => ({
             noteId: makeGeneratedId(eventId, "note", noteIndex + 1),
             noteIndex,
@@ -169,6 +173,7 @@ function normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTo
             note: sourceNote.note,
             durSec: isFiniteNumber(sourceNote.dur) ? sourceNote.dur : null,
             hand: sourceNote.hand,
+            originalTimeSec: isFiniteNumber(sourceNote.time) ? sourceNote.time : null,
             source: sourceCopy(sourceNote)
         }));
 
@@ -180,7 +185,7 @@ function normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTo
             midi: event.midi,
             notes: eventNotes,
             source: {
-                generatedFrom: "bar.notes",
+                generatedFrom,
                 sourceNotes: sourceCopy(event.sourceNotes)
             }
         };
@@ -242,9 +247,33 @@ function normalisePage(page, context, warnings, options) {
     const pageIndex = Number.isInteger(page.pageIndex) ? page.pageIndex : context.pageIndex;
     const pageNumber = Number.isInteger(page.pageNumber) ? page.pageNumber : pageIndex + 1;
     const pageId = page.pageId ?? makeGeneratedId("page", pageNumber);
+    const durationSec = isFiniteNumber(page.duration) ? page.duration : null;
+
+    if (Array.isArray(page.notes)) {
+        const events = normaliseEventsFromIndividualNotes(page.notes, {
+            pageId,
+            eventPrefix: pageId,
+            generatedFrom: "page.notes",
+            path: `pages[${context.pageIndex}]`
+        }, warnings, options.groupingTolerance);
+
+        if (events.length === 0) {
+            warnings.push(`pages[${context.pageIndex}] ignored: page has no valid events`);
+            return null;
+        }
+
+        return {
+            pageId,
+            pageIndex,
+            pageNumber,
+            durationSec,
+            events,
+            source: sourceCopy(page)
+        };
+    }
 
     if (!Array.isArray(page.bars) && !Array.isArray(page.measures)) {
-        warnings.push(`pages[${context.pageIndex}] ignored: page must contain bars or measures`);
+        warnings.push(`pages[${context.pageIndex}] ignored: page must contain bars, measures, or notes`);
         return null;
     }
 
@@ -268,7 +297,7 @@ function normalisePage(page, context, warnings, options) {
         pageId,
         pageIndex,
         pageNumber,
-        durationSec: isFiniteNumber(page.duration) ? page.duration : null,
+        durationSec,
         bars,
         source: sourceCopy(page)
     };
@@ -323,10 +352,13 @@ function normaliseDraftFullScore(input, options = {}) {
         error: null,
         score: {
             type: "normalized_full_score",
-            scoreId: input.scoreId ?? "score-1",
-            title: input.title ?? null,
+            scoreId: input.scoreId ?? input.songTitle ?? "score-1",
+            title: input.title ?? input.songTitle ?? null,
             pages,
-            sourceContract: "draft_full_score_v1"
+            totalPages: Number.isInteger(input.totalPages) ? input.totalPages : null,
+            sourceContract: input.songTitle || Number.isInteger(input.totalPages)
+                ? "confirmed_parser_pages_v1"
+                : "draft_full_score_v1"
         },
         warnings
     };

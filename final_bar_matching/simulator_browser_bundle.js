@@ -9,6 +9,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const buildScript = path.join(repoRoot, "scripts", "build_final_bar_matching_browser_bundle.js");
 const bundlePath = path.join(repoRoot, "web_app", "final_bar_matching.browser.js");
 const fixturePath = path.join(repoRoot, "final_bar_matching", "fixtures", "full_score.draft.example.json");
+const parserFixturePath = path.join(repoRoot, "final_bar_matching", "fixtures", "fur_elise.parser.example.json");
 const bundleBuilder = require(buildScript);
 
 function runBuilder() {
@@ -81,6 +82,17 @@ function runBrowserBundleSmokeTest() {
     const normalized = api.normaliseDraftFullScore(fixture, { groupingTolerance: 0.03 });
     assert.equal(normalized.ok, true);
     assert.equal(normalized.score.pages.length, 2);
+
+    const parserFixture = JSON.parse(fs.readFileSync(parserFixturePath, "utf8"));
+    const normalizedParserScore = api.normaliseDraftFullScore(parserFixture, { groupingTolerance: 0.001 });
+    assert.equal(normalizedParserScore.ok, true);
+    assert.equal(normalizedParserScore.score.sourceContract, "confirmed_parser_pages_v1");
+    assert.equal(normalizedParserScore.score.pages.length, 3);
+    assert.equal(Array.isArray(normalizedParserScore.score.pages[0].bars), false);
+    assert.deepEqual(
+        Array.from(normalizedParserScore.score.pages[0].events.find((event) => event.scoreTimeSec === 2).midi),
+        [45, 69]
+    );
 
     const pipeline = api.createFrequencyScorePipeline(normalized.score, {
         trackerOptions: {
