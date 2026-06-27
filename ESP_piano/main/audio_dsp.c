@@ -1,6 +1,7 @@
 #include "audio_dsp.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "web_server.h"
 #include "dsps_fft2r.h"
 #include "dsps_math.h"
 #include "dsps_wind.h"  
@@ -94,6 +95,7 @@ void process_audio_frame(const float* sample_buffer, uint32_t signal_amplitude_m
                     frequency_to_note(frequency_hz, note_string, sizeof(note_string));
                     ESP_LOGI(TAG, "FFT SUCCESS: %-10s | %7.1f Hz | Mag: %6.0f | VPP: %lu mV",
                              note_string, frequency_hz, hold_peak_magnitude, signal_amplitude_mv);
+                    web_server_send_midi_packet(0x90, current_midi_note, 100);
                 }
             }
             

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 DSP Piano - Sheet Music Parser & Controller</title>
+    <!-- Google Fonts & Lucide Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <div class="logo">
+                <i data-lucide="music-4"></i>
+                <span>DSP Piano Visualizer</span>
+            </div>
+            <span class="badge badge-edge">ESP32 Client</span>
+        </div>
+        
+        <div class="connection-bar">
+            <div class="input-wrapper">
+                <i data-lucide="cpu"></i>
+                <input type="text" id="esp-ip" placeholder="ESP32 IP (e.g., 192.168.4.1)" value="192.168.4.1">
+            </div>
+            <button class="btn btn-sm btn-accent" id="btn-connect-esp">
+                <i data-lucide="wifi"></i> Connect
+            </button>
+            <div class="status-indicator" id="conn-status">
+                <span class="dot"></span> <span class="status-text">Disconnected</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-layout">
+        
+        <!-- SIDEBAR: Controls & Settings -->
+        <aside class="sidebar">
+            
+            <!-- SECTION 1: PDF Upload & OMR -->
+            <div class="sidebar-card">
+                <h3><i data-lucide="file-text"></i> 1. Sheet Music PDF</h3>
+                <div class="upload-dropzone" id="pdf-dropzone">
+                    <i data-lucide="upload-cloud" class="upload-icon"></i>
+                    <p class="dropzone-text">Drag & drop your sheet music PDF here or click to browse</p>
+                    <input type="file" id="pdf-file-input" accept=".pdf" style="display: none;">
+                </div>
+                <div class="file-info" id="file-info-bar" style="display: none;">
+                    <span id="file-name-text">filename.pdf</span>
+                    <button class="btn-clear" id="btn-clear-pdf"><i data-lucide="x"></i></button>
+                </div>
+            </div>
+
+            <!-- SECTION 2: AI OMR Parser Settings -->
+            <div class="sidebar-card">
+                <h3><i data-lucide="sparkles"></i> 2. Gemini AI Parser</h3>
+                <div class="input-group">
+                    <label for="gemini-key">Gemini API Key</label>
+                    <div class="input-password-wrapper">
+                        <input type="password" id="gemini-key" placeholder="AIzaSy...">
+                        <button class="btn-toggle-visibility" id="toggle-key-visibility"><i data-lucide="eye"></i></button>
+                    </div>
+                    <span class="help-text">Saved locally in your browser's localStorage.</span>
+                </div>
+                
+                <button class="btn btn-accent btn-full" id="btn-parse-pdf" disabled>
+                    <i data-lucide="wand-2"></i> Transcribe PDF (OMR)
+                </button>
+            </div>
+
+            <!-- SECTION 3: Offline MIDI Fallback -->
+            <div class="sidebar-card">
+                <h3><i data-lucide="file-up"></i> Offline Import</h3>
+                <p class="card-desc">If you don't have an API key, upload a MIDI file directly.</p>
+                <div class="button-group-vertical">
+                    <button class="btn btn-secondary btn-full" onclick="document.getElementById('midi-file-input').click()">
+                        <i data-lucide="music"></i> Upload MIDI File (.mid)
+                    </button>
+                    <input type="file" id="midi-file-input" accept=".mid,.midi" style="display: none;">
+                    <button class="btn btn-secondary btn-full" id="btn-load-demo">
+                        <i data-lucide="folder-heart"></i> Load Demo Song
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION 4: Song Controls -->
+            <div class="sidebar-card">
+                <h3><i data-lucide="play-circle"></i> Playback Controls</h3>
+                <div class="playback-controls">
+                    <button class="btn btn-round" id="btn-play-pause" disabled>
+                        <i data-lucide="play" id="play-icon-state"></i>
+                    </button>
+                    <button class="btn btn-round btn-secondary" id="btn-stop" disabled>
+                        <i data-lucide="square"></i>
+                    </button>
+                    <div class="volume-slider">
+                        <i data-lucide="volume-2"></i>
+                        <input type="range" id="volume-control" min="0" max="100" value="50">
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- MAIN VIEWPORTS -->
+        <section class="main-content">
+            
+            <!-- TOP VIEWPORT: Rendered Sheet Music (PDF) -->
+            <div class="viewport-box sheet-viewport">
+                <div class="viewport-header">
+                    <h4><i data-lucide="book-open"></i> Sheet Music Render</h4>
+                    <div class="pagination-controls" id="pdf-pagination" style="display: none;">
+                        <button class="btn btn-xs btn-secondary" id="btn-prev-page"><i data-lucide="chevron-left"></i></button>
+                        <span>Page <span id="current-page-num">1</span> of <span id="total-pages-num">1</span></span>
+                        <button class="btn btn-xs btn-secondary" id="btn-next-page"><i data-lucide="chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="sheet-render-container" id="sheet-render-area">
+                    <div class="empty-state" id="sheet-empty">
+                        <i data-lucide="file-text" class="empty-icon"></i>
+                        <p>Upload a sheet music PDF to view it here</p>
+                    </div>
+                    <canvas id="pdf-render-canvas" style="display: none;"></canvas>
+                    <div class="loading-overlay" id="pdf-loading-overlay">
+                        <i data-lucide="loader" class="spinner"></i>
+                        <span id="loading-overlay-text">Processing...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MIDDLE VIEWPORT: Waterfall / Piano Roll -->
+            <div class="viewport-box waterfall-viewport">
+                <div class="viewport-header">
+                    <h4><i data-lucide="activity"></i> Falling Note Waterfall</h4>
+                    <div class="waterfall-legend">
+                        <span class="legend-item"><span class="color-dot right-hand"></span> Right Hand</span>
+                        <span class="legend-item"><span class="color-dot left-hand"></span> Left Hand</span>
+                    </div>
+                </div>
+                <div class="waterfall-canvas-container">
+                    <canvas id="waterfall-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- BOTTOM VIEWPORT: Virtual Keyboard -->
+            <div class="keyboard-viewport">
+                <div class="piano-keyboard-scroll">
+                    <div class="piano-keyboard" id="piano-keys">
+                        <!-- Keys will be populated dynamically by JavaScript to support full 88-key or standard ranges -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- FOOTER: System logs and Output JSON Inspection -->
+            <div class="inspector-section">
+                <div class="inspector-tab-header">
+                    <button class="tab-btn active" data-tab="logs">System Console Logs</button>
+                    <button class="tab-btn" data-tab="json">Transcribed Note Data (JSON)</button>
+                </div>
+                <div class="inspector-tab-content">
+                    <pre class="inspector-panel active" id="logs-panel">[Console Initialized] Web application started. Ready for PDF uploading...</pre>
+                    <pre class="inspector-panel" id="json-panel">{ "notes": [] }</pre>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

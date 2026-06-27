@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 DSP Piano - Tech Demo & Pitch Deck</title>
+    <!-- Google Fonts & Lucide Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-color: #0b0813;
+            --panel-bg: rgba(22, 17, 36, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-purple: #9d4edd;
+            --accent-cyan: #00f5d4;
+            --accent-pink: #ff007f;
+            --text-main: #f1ecf9;
+            --text-muted: #a499b7;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-body: 'Outfit', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(157, 78, 221, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 245, 212, 0.1) 0%, transparent 40%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(11, 8, 19, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tagline {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border: 1px solid var(--accent-cyan);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-family: var(--font-display);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            flex: 1;
+            width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            backdrop-filter: blur(16px);
+            padding: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #fff;
+        }
+
+        p {
+            line-height: 1.6;
+            color: var(--text-muted);
+        }
+
+        /* Flow Diagram styling */
+        .diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin: 1rem 0;
+            background: rgba(0,0,0,0.2);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.02);
+            border-left: 3px solid var(--accent-purple);
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            border-left-color: var(--accent-cyan);
+            background: rgba(0, 245, 212, 0.05);
+            transform: translateX(5px);
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+        }
+
+        .step.active .step-num {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .step-details h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.2rem;
+            color: #fff;
+        }
+
+        .step-details p {
+            font-size: 0.8rem;
+            line-height: 1.3;
+        }
+
+        /* Parser Simulator styling */
+        .upload-area {
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255,255,255,0.01);
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-purple);
+            background: rgba(157, 78, 221, 0.03);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-purple), #7b2cbf);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            font-family: var(--font-display);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 15px rgba(157, 78, 221, 0.3);
+            flex: 1;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(157, 78, 221, 0.5);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--text-muted);
+            box-shadow: none;
+        }
+
+        .btn-accent {
+            background: linear-gradient(135deg, var(--accent-cyan), #00bbf9);
+            color: #0b0813;
+            box-shadow: 0 4px 15px rgba(0, 245, 212, 0.3);
+        }
+
+        .btn-accent:hover {
+            box-shadow: 0 6px 20px rgba(0, 245, 212, 0.5);
+        }
+
+        /* Sheet Music Preview & Visualizer Container */
+        .visualizer-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            height: 100%;
+        }
+
+        .sheet-container {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            height: 250px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .sheet-img {
+            max-height: 90%;
+            opacity: 0.85;
+            transition: filter 0.5s ease;
+        }
+
+        .sheet-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 8, 19, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 1rem;
+            color: white;
+            font-family: var(--font-display);
+            text-align: center;
+            backdrop-filter: blur(2px);
+            transition: opacity 0.5s ease;
+        }
+
+        /* Waterfall Piano Roll */
+        .waterfall-container {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            height: 200px;
+            background: #0f0b1b;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .waterfall-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Virtual Piano Keyboard */
+        .keyboard {
+            display: flex;
+            width: 100%;
+            height: 90px;
+            background: #111;
+            padding: 2px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .key {
+            flex: 1;
+            height: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 0 0 4px 4px;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            transition: background 0.1s ease;
+        }
+
+        .key:active, .key.active {
+            background: var(--accent-cyan);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.3), 0 0 10px var(--accent-cyan);
+        }
+
+        .key.black {
+            background: black;
+            border: 1px solid #333;
+            height: 60%;
+            margin-left: -2.5%;
+            margin-right: -2.5%;
+            z-index: 2;
+            flex: 0.6;
+        }
+
+        .key.black:active, .key.black.active {
+            background: var(--accent-purple);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5), 0 0 10px var(--accent-purple);
+        }
+
+        /* Log / Data Inspector */
+        .log-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            height: 120px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        /* Badge details */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-success { background: rgba(0, 245, 212, 0.15); color: var(--accent-cyan); }
+        .badge-info { background: rgba(157, 78, 221, 0.15); color: var(--accent-purple); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <i data-lucide="music-4"></i>
+            DSP Piano & OMR Parser
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <span class="badge badge-success">ESP32 Server: Connected Mock</span>
+            <span class="tagline">Hackathon Live Demo Mockup</span>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- LEFT PANEL: Technical Pitch & Explanation -->
+        <div class="panel">
+            <div>
+                <h2><i data-lucide="info" style="color:var(--accent-cyan)"></i> How it Works (Pitch Deck)</h2>
+                <p style="margin-top: 0.5rem;">This interactive mockup shows how the client-side sheet parser collaborates with the ESP32 to drive piano lights and DSP visualization.</p>
+            </div>
+
+            <div class="diagram">
+                <div class="step" id="step-1">
+                    <div class="step-num">1</div>
+                    <div class="step-details">
+                        <h4>PDF Input & Rendering</h4>
+                        <p>A user drops a sheet music PDF. The app uses <code>PDF.js</code> to render pages to canvases.</p>
+                    </div>
+                </div>
+
+                <div class="step" id="step-2">
+                    <div class="step-num">2</div>
+                    <div class="step-details">
+                        <h4>Gemini AI Multimodal OMR</h4>
+                        <p>We convert the canvas to images, and send them to the Gemini API with a JSON schema constraint.</p>
+                    </div>
+                </div>
+
+                <div class="step" id="step-3">
+                    <div class="step-num">3</div>
+                    <div class="step-details">
+                        <h4>Unified Event JSON & MIDI</h4>
+                        <p>The parser outputs structured piano notes: <code>[{time: 1.2, note: "C4", dur: 0.5}]</code>.</p>
+                    </div>
+                </div>
+
+                <div class="step" id="step-4">
+                    <div class="step-num">4</div>
+                    <div class="step-details">
+                        <h4>ESP32 Light sync & DSP</h4>
+                        <p>Notes are streamed to ESP32 via WebSocket (MIDI bytes) to light up LEDs. DSP listens to verify if the correct note was played!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h3>Key Selling Points for Judges:</h3>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; display:flex; flex-direction:column; gap:0.5rem; color:var(--text-muted); font-size: 0.9rem;">
+                    <li><strong>AI + Edge Collaboration:</strong> Heavy visual computation (OMR) runs in-browser using Gemini API; Edge (ESP32) handles low-latency note lights & audio DSP.</li>
+                    <li><strong>100% Client-side:</strong> No custom backend server to crash. Runs straight off local file or ESP32 SPIFFS.</li>
+                    <li><strong>Offline Capability:</strong> Instantly parses MIDI/MusicXML files locally if internet fails.</li>
+                </ul>
+            </div>
+
+            <div class="log-box" id="terminal-log">
+[System Log] Console loaded. Ready for interactive demonstration.
+Click "Simulate PDF Upload & Parse" or "Play Demo Song" to watch the pipeline in action.
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: Interactive Demo Sandbox -->
+        <div class="panel visualizer-card">
+            <h2><i data-lucide="cpu" style="color:var(--accent-purple)"></i> Live Interactive Demo</h2>
+            
+            <!-- Sheet Music Area -->
+            <div class="sheet-container" id="sheet-wrapper">
+                <!-- Mock Sheet Music SVG representation -->
+                <svg id="mock-sheet" class="sheet-img" width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Staff lines -->
+                    <line x1="20" y1="50" x2="380" y2="50" stroke="#333" stroke-width="2"/>
+                    <line x1="20" y1="65" x2="380" y2="65" stroke="#333" stroke-width="2"/>
+                    <line x1="20" y1="80" x2="380" y2="80" stroke="#333" stroke-width="2"/>
+                    <line x1="20" y1="95" x2="380" y2="95" stroke="#333" stroke-width="2"/>
+                    <line x1="20" y1="110" x2="380" y2="110" stroke="#333" stroke-width="2"/>
+                    <!-- Clef Symbol Mock -->
+                    <text x="30" y="98" font-family="serif" font-size="65" fill="#111" font-weight="bold">𝄞</text>
+                    <!-- Notes -->
+                    <circle cx="120" cy="110" r="8" fill="#111" id="sheet-note-0"/>
+                    <line x1="128" y1="110" x2="128" y2="60" stroke="#111" stroke-width="2"/>
+                    
+                    <circle cx="180" cy="95" r="8" fill="#111" id="sheet-note-1"/>
+                    <line x1="188" y1="95" x2="188" y2="45" stroke="#111" stroke-width="2"/>
+                    
+                    <circle cx="240" cy="80" r="8" fill="#111" id="sheet-note-2"/>
+                    <line x1="248" y1="80" x2="248" y2="30" stroke="#111" stroke-width="2"/>
+                    
+                    <circle cx="300" cy="65" r="8" fill="#111" id="sheet-note-3"/>
+                    <line x1="308" y1="65" x2="308" y2="15" stroke="#111" stroke-width="2"/>
+                </svg>
+
+                <div class="sheet-overlay" id="sheet-loading" style="opacity: 0; pointer-events: none;">
+                    <i data-lucide="loader" class="spin" style="animation: spin 2s linear infinite;"></i>
+                    <div id="loading-text">Extracting PDF pages...</div>
+                </div>
+            </div>
+
+            <!-- Upload Controls -->
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div class="button-group">
+                    <button class="btn btn-accent" id="btn-simulate-parse">
+                        <i data-lucide="upload-cloud"></i> Simulate PDF Upload & Parse
+                    </button>
+                    <button class="btn" id="btn-play-song">
+                        <i data-lucide="play" id="play-icon"></i> Play Demo Song
+                    </button>
+                </div>
+            </div>
+
+            <!-- Waterfall Visualizer -->
+            <div class="waterfall-container">
+                <canvas id="waterfall" class="waterfall-canvas"></canvas>
+            </div>
+
+            <!-- Keyboard Layout -->
+            <div class="keyboard" id="piano-keyboard">
+                <!-- White & Black Keys (2 Octaves for Demo) -->
+                <!-- Octave 1 -->
+                <div class="key" data-note="C4" data-midi="60"></div>
+                <div class="key black" data-note="C#4" data-midi="61"></div>
+                <div class="key" data-note="D4" data-midi="62"></div>
+                <div class="key black" data-note="D#4" data-midi="63"></div>
+                <div class="key" data-note="E4" data-midi="64"></div>
+                <div class="key" data-note="F4" data-midi="65"></div>
+                <div class="key black" data-note="F#4" data-midi="66"></div>
+                <div class="key" data-note="G4" data-midi="67"></div>
+                <div class="key black" data-note="G#4" data-midi="68"></div>
+                <div class="key" data-note="A4" data-midi="69"></div>
+                <div class="key black" data-note="A#4" data-midi="70"></div>
+                <div class="key" data-note="B4" data-midi="71"></div>
+                <!-- Octave 2 -->
+                <div class="key" data-note="C5" data-midi="72"></div>
+                <div class="key black" data-note="C#5" data-midi="73"></div>
+                <div class="key" data-note="D5" data-midi="74"></div>
+                <div class="key black" data-note="D#5" data-midi="75"></div>
+                <div class="key" data-note="E5" data-midi="76"></div>
+                <div class="key" data-note="F5" data-midi="77"></div>
+                <div class="key black" data-note="F#5" data-midi="78"></div>
+                <div class="key" data-note="G5" data-midi="79"></div>
+                <div class="key black" data-note="G#5" data-midi="80"></div>
+                <div class="key" data-note="A5" data-midi="81"></div>
+                <div class="key black" data-note="A#5" data-midi="82"></div>
+                <div class="key" data-note="B5" data-midi="83"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script logic -->
+    <script>
+        lucide.createIcons();
+
+        // Audio Context Setup for Synth Mockup
+        let audioCtx = null;
+        function playTone(freq, duration) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        // MIDI mappings
+        const midiFreq = {
+            60: 261.63, 61: 277.18, 62: 293.66, 63: 311.13, 64: 329.63, 65: 349.23,
+            66: 369.99, 67: 392.00, 68: 415.30, 69: 440.00, 70: 466.16, 71: 493.88,
+            72: 523.25, 73: 554.37, 74: 587.33, 75: 622.25, 76: 659.25, 77: 698.46,
+            78: 739.99, 79: 783.99, 80: 830.61, 81: 880.00, 82: 932.33, 83: 987.77
+        };
+
+        const demoNotes = [
+            { time: 0.0, note: "C4", midi: 60, dur: 0.4 },
+            { time: 0.5, note: "E4", midi: 64, dur: 0.4 },
+            { time: 1.0, note: "G4", midi: 67, dur: 0.4 },
+            { time: 1.5, note: "C5", midi: 72, dur: 0.6 },
+            { time: 2.2, note: "G4", midi: 67, dur: 0.4 },
+            { time: 2.7, note: "E4", midi: 64, dur: 0.4 },
+            { time: 3.2, note: "C4", midi: 60, dur: 0.8 }
+        ];
+
+        // UI References
+        const terminalLog = document.getElementById('terminal-log');
+        const sheetLoading = document.getElementById('sheet-loading');
+        const loadingText = document.getElementById('loading-text');
+        const btnSimulate = document.getElementById('btn-simulate-parse');
+        const btnPlay = document.getElementById('btn-play-song');
+        const playIcon = document.getElementById('play-icon');
+        const mockSheet = document.getElementById('mock-sheet');
+        const keys = document.querySelectorAll('.key');
+
+        function addLog(text) {
+            const time = new Date().toLocaleTimeString();
+            terminalLog.innerHTML += `\n[${time}] ${text}`;
+            terminalLog.scrollTop = terminalLog.scrollHeight;
+        }
+
+        // Highlight Steps in UI
+        function activateStep(stepNum) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            if(stepNum > 0) {
+                document.getElementById(`step-${stepNum}`).classList.add('active');
+            }
+        }
+
+        // Canvas Setup for Waterfall
+        const canvas = document.getElementById('waterfall');
+        const ctx = canvas.getContext('2d');
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let fallingNotes = [];
+        let isPlaying = false;
+        let animationFrameId = null;
+        let playStartTime = 0;
+
+        function updateWaterfall() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw divider lines for lanes corresponding to keys
+            const keyCount = 24; // 2 octaves
+            const laneWidth = canvas.width / keyCount;
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            for (let i = 1; i < keyCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * laneWidth, 0);
+                ctx.lineTo(i * laneWidth, canvas.height);
+                ctx.stroke();
+            }
+
+            if (isPlaying) {
+                const elapsed = (Date.now() - playStartTime) / 1000;
+                
+                // Draw falling bars
+                ctx.fillStyle = 'rgba(0, 245, 212, 0.6)';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00f5d4';
+
+                demoNotes.forEach(note => {
+                    // map midi note 60 to index 0, midi 83 to index 23
+                    const laneIndex = note.midi - 60;
+                    if (laneIndex >= 0 && laneIndex < keyCount) {
+                        const x = laneIndex * laneWidth + 2;
+                        const w = laneWidth - 4;
+                        
+                        // Calculate vertical position based on time
+                        // speed = 100 pixels per second
+                        const speed = 70;
+                        const y = (note.time - elapsed) * speed + (canvas.height - 40);
+                        const h = note.dur * speed;
+
+                        if (y < canvas.height && y + h > 0) {
+                            ctx.fillRect(x, y, w, h);
+                        }
+
+                        // Trigger key press when note hits bottom (y matches key top approx)
+                        const hitThreshold = canvas.height - 40;
+                        const isNoteActive = (elapsed >= note.time && elapsed <= note.time + note.dur);
+                        
+                        const keyEl = document.querySelector(`.key[data-midi="${note.midi}"]`);
+                        if (keyEl) {
+                            if (isNoteActive) {
+                                keyEl.classList.add('active');
+                            } else {
+                                keyEl.classList.remove('active');
+                            }
+                        }
+                    }
+                });
+
+                // Reset shadow
+                ctx.shadowBlur = 0;
+
+                // Stop condition
+                const lastNote = demoNotes[demoNotes.length - 1];
+                if (elapsed > lastNote.time + lastNote.dur + 0.5) {
+                    stopPlayback();
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(updateWaterfall);
+        }
+
+        animationFrameId = requestAnimationFrame(updateWaterfall);
+
+        function startPlayback() {
+            isPlaying = true;
+            playStartTime = Date.now();
+            btnPlay.classList.add('btn-accent');
+            playIcon.setAttribute('data-lucide', 'square');
+            lucide.createIcons();
+            addLog("Streaming song note events to ESP32 WebSocket...");
+            activateStep(4);
+
+            // Schedule audio tones
+            demoNotes.forEach(note => {
+                setTimeout(() => {
+                    if (isPlaying) {
+                        playTone(midiFreq[note.midi], note.dur);
+                        addLog(`Live ESP-NOW Broadcast: Note ON (${note.note}) -> ESP_lights`);
+                        // Flash matching sheet note in SVG
+                        const noteIndex = demoNotes.indexOf(note);
+                        if (noteIndex >= 0 && noteIndex < 4) {
+                            const svgNote = document.getElementById(`sheet-note-${noteIndex}`);
+                            if(svgNote) {
+                                svgNote.style.fill = 'var(--accent-cyan)';
+                                svgNote.style.r = '11';
+                                setTimeout(() => {
+                                    svgNote.style.fill = '#111';
+                                    svgNote.style.r = '8';
+                                }, note.dur * 1000);
+                            }
+                        }
+                    }
+                }, note.time * 1000);
+            });
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            btnPlay.classList.remove('btn-accent');
+            playIcon.setAttribute('data-lucide', 'play');
+            lucide.createIcons();
+            addLog("Playback stopped.");
+            activateStep(0);
+            keys.forEach(k => k.classList.remove('active'));
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        });
+
+        // Click individual piano keys
+        keys.forEach(key => {
+            key.addEventListener('mousedown', () => {
+                const midi = key.getAttribute('data-midi');
+                const note = key.getAttribute('data-note');
+                playTone(midiFreq[midi], 0.3);
+                key.classList.add('active');
+                addLog(`Local Input: Key Pressed ${note} (Midi: ${midi}). Broadcasting to ESP_lights.`);
+            });
+            key.addEventListener('mouseup', () => {
+                key.classList.remove('active');
+            });
+            key.addEventListener('mouseleave', () => {
+                key.classList.remove('active');
+            });
+        });
+
+        // Simulate OMR PDF Parsing
+        btnSimulate.addEventListener('click', () => {
+            if(isPlaying) stopPlayback();
+            
+            sheetLoading.style.opacity = 1;
+            sheetLoading.style.pointerEvents = 'auto';
+            mockSheet.style.filter = 'blur(4px)';
+            
+            // Step 1: Render PDF
+            activateStep(1);
+            loadingText.innerHTML = "Rendering PDF pages via PDF.js...";
+            addLog("Selected PDF: 'beethoven_ode_to_joy.pdf'");
+            addLog("Loading PDF.js pipeline...");
+            
+            setTimeout(() => {
+                // Step 2: Call Gemini API
+                activateStep(2);
+                loadingText.innerHTML = "Calling Gemini API (Transcribing OMR)...";
+                addLog("Exporting page canvases as JPEG blobs...");
+                addLog("Sending image request to Gemini API (gemini-2.5-flash)...");
+                addLog("Attached responseSchema for structured JSON notes.");
+                
+                setTimeout(() => {
+                    // Step 3: Parse output JSON
+                    activateStep(3);
+                    loadingText.innerHTML = "Processing transcribed notes JSON...";
+                    addLog("Gemini response received! Structured array containing 7 notes extracted.");
+                    addLog("JSON Output:\n" + JSON.stringify(demoNotes.map(n => ({time: n.time, note: n.note, dur: n.dur})), null, 2));
+                    
+                    setTimeout(() => {
+                        // Finished
+                        sheetLoading.style.opacity = 0;
+                        sheetLoading.style.pointerEvents = 'none';
+                        mockSheet.style.filter = 'none';
+                        activateStep(0);
+                        addLog("Success! Song loaded into player. Ready for playback / ESP32 stream.");
+                        
+                        // Flash button to play
+                        btnPlay.classList.add('btn-accent');
+                        setTimeout(() => btnPlay.classList.remove('btn-accent'), 1500);
+                    }, 1200);
+                    
+                }, 2000);
+                
+            }, 1500);
+        });
+
+    </script>
+</body>
+</html>

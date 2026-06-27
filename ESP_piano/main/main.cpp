@@ -4,11 +4,13 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "soc/soc_caps.h"
+#include "nvs_flash.h"
 
 /* created modules */
 #include "adc_sampler.h"
 #include "audio_dsp.h"
-#include <adc_sampler.h>
+#include "web_server.h"
+#include "network.h"
 
 const gpio_num_t ONBOARD_LED_GPIO = (gpio_num_t)2;
 
@@ -30,6 +32,21 @@ void blink_heartbeat_task(void *pvParameters)
 //extern "C" --> Tell Compiler to treat functio as pure C code
 extern "C" void app_main(void)
 {
+    // Initialize NVS (Wi-Fi/networking requires NVS)
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Boot Wi-Fi AP and HTTP/WebSocket Server
+    wifi_init_softap();
+    start_web_server();
+
+    // Start ESP-NOW network broadcast
+    Network.begin();
+
     xTaskCreate(blink_heartbeat_task, "blink_task", 2048, NULL, 5, NULL);
     
     init_dsp_library();
