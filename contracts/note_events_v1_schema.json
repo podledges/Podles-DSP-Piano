@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://podles-dsp-piano.local/contracts/note_events_v1_schema.json",
+  "title": "note_events_v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["note_on", "note_off", "snapshot", "status"]
+    },
+    "midi": {
+      "type": "integer",
+      "minimum": 21,
+      "maximum": 108
+    },
+    "onset_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "offset_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "velocity": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 127
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "source": {
+      "type": "string",
+      "enum": ["server", "esp_hint"]
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": ["type", "session_id"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"type": {"const": "note_on"}},
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["midi", "onset_ms", "source", "seq"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"type": {"const": "note_off"}},
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["midi", "offset_ms", "source", "seq"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"type": {"const": "snapshot"}},
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["midi", "source", "seq"]
+      }
+    }
+  ]
+}

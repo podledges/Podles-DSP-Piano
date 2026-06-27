@@ -1,0 +1,17 @@
+menu "Podles DSP Piano Config"
+    config SERVER_URI
+        string "WebSocket server URI"
+        default "ws://192.168.1.100:8000/stream"
+        help
+            URI of the laptop server that receives the PCM stream.
+            Format: ws://HOST:PORT/PATH
+
+    config ESP_HINT_ENABLED
+        bool "Enable on-board FFT instant hint (non-authoritative)"
+        default n
+        help
+            When enabled, runs a lightweight monophonic FFT on the ESP32-S3
+            and emits esp_hint note events for low-latency local feedback.
+            The laptop server remains the authoritative transcription source.
+            Adds ~1ms of CPU per 1024-sample window on core 1.
+endmenu

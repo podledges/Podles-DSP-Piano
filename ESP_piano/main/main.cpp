@@ -1,109 +1,101 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
 #include "esp_log.h"
-#include "soc/soc_caps.h"
-
-/* created modules */
-#include "adc_sampler.h"
-#include "audio_dsp.h"
-#include <adc_sampler.h>
-
-const gpio_num_t ONBOARD_LED_GPIO = (gpio_num_t)2;
+#include "nvs_flash.h"
+#include "board_pins.h"
+#include "startup.h"
+#include "hal/capture_source.h"
+#include "hal/wifi_sta.h"
+#include "hal/ws_stream.h"
+#include "core/esp_hint.h"
+#include "core/ringbuf.h"
+#include "core/pcm_framer.h"
 
 static const char *TAG = "MAIN";
-static float sample_buffer[FFT_SIZE];
-static int   sample_count = 0;
+#define FIRMWARE_VERSION  "v2.0.0"
 
-void blink_heartbeat_task(void *pvParameters)
-{
-    gpio_reset_pin(ONBOARD_LED_GPIO);
-    gpio_set_direction(ONBOARD_LED_GPIO, GPIO_MODE_OUTPUT);
-    while (1) {
-        gpio_set_level(ONBOARD_LED_GPIO, 1);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        gpio_set_level(ONBOARD_LED_GPIO, 0);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+static int16_t s_rb_storage[4096];
+static ringbuf_t s_ringbuf;
+static pcm_framer_t s_framer;
+
+static void esp_hint_log_event(const char *note_event_json, void *ctx) {
+    (void)ctx;
+    ESP_LOGI("ESP_HINT_EVENT", "%s", note_event_json);
 }
-//extern "C" --> Tell Compiler to treat functio as pure C code
-extern "C" void app_main(void)
-{
-    xTaskCreate(blink_heartbeat_task, "blink_task", 2048, NULL, 5, NULL);
-    
-    init_dsp_library();
-    
-    adc_continuous_handle_t adc_handle = NULL;  
-    init_adc(&adc_handle);
-    ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
-    static uint8_t raw_result_buffer[READ_LENGTH] = {0};
-    uint32_t bytes_read = 0;
-
-    ESP_LOGI(TAG, "=== Sampling started, FFT size = %d, resolution = %.1f Hz ===",
-             FFT_SIZE, (float)SAMPLE_RATE / FFT_SIZE);
-
+// capture_task: runs on core 1, feeds ring buffer
+static void capture_task(void *arg) {
+    capture_source_t *src = capture_source_get_default();
+    ESP_ERROR_CHECK(src->init(src));
+    int16_t samples[64];
     while (1) {
-        esp_err_t ret = adc_continuous_read(adc_handle, raw_result_buffer,      
-                                            READ_LENGTH, &bytes_read, portMAX_DELAY);
-
-        if (ret == ESP_OK) {        
-            for (int i = 0; i < bytes_read; i += SOC_ADC_DIGI_RESULT_BYTES) {   
-                if (sample_count >= FFT_SIZE) break;
-                
-                adc_digi_output_data_t *output_data_pointer = (adc_digi_output_data_t*)&raw_result_buffer[i];
-                sample_buffer[sample_count++] = (float)output_data_pointer->type1.data;
-            }
-
-            /* process audio frame .*/
-            if (sample_count >= FFT_SIZE) { // When we sample enough to fill the buffer
-                float avg_adc_val = 0.0f;
-                
-                // Get amplitude using our ADC module
-                uint32_t signal_amplitude_mv = get_peak_to_peak_mv(sample_buffer, FFT_SIZE, &avg_adc_val);
-
-                // 2. Process the frame using our DSP module
-                process_audio_frame(sample_buffer, signal_amplitude_mv);
-                
-                sample_count = 0;
-            }
-        } else {    
-            vTaskDelay(pdMS_TO_TICKS(1));
+        if (src->read(src, samples, 64) == ESP_OK) {
+            esp_hint_feed(samples, 64);
+            for (int i = 0; i < 64; i++) ringbuf_push(&s_ringbuf, samples[i]);
         }
     }
 }
-/*
-// 1. Run FFT and Envelope Reader
-uint8_t currentAmplitude = readEnvelope();
-uint8_t currentNoteCount = getLoudestPeaks(currentNotesArray); // Up to 10
 
-// 2. Check for Silence (Note-Off)
-if (currentAmplitude < THRESHOLD && isPlaying) {
-    isPlaying = false;
-    PianoEventPacket packet = {0, {0}, 0}; // The Staccato trigger
-    Network.broadcast((uint8_t *) &packet, sizeof(packet));
-}
-
-// 3. Check for New Attack or Changed Chord
-else if (currentAmplitude >= THRESHOLD) {
-    isPlaying = true;
-    
-    // Compare currentNotesArray to Last_Sent_Notes array
-    // Compare currentAmplitude to Last_Sent_Amplitude
-    
-    if (chordChanged || amplitudeSpiked) {
-        // Build the packet
-        PianoEventPacket packet;
-        packet.noteCount = currentNoteCount;
-        packet.overallAmplitude = currentAmplitude;
-        // Copy currentNotesArray into packet.activeNotes...
-        
-        // Broadcast!
-        Network.broadcast((uint8_t *) &packet, sizeof(packet));
-        
-        // Update memory
-        saveToMemory(currentNotesArray, currentAmplitude);
+// stream_task: runs on core 0, drains ring buffer through framer to websocket
+static void stream_task(void *arg) {
+    framer_frame_t frame;
+    int16_t s;
+    while (1) {
+        while (ringbuf_pop(&s_ringbuf, &s)) {
+            if (pcm_framer_push(&s_framer, s, &frame)) {
+                ws_stream_send_frame(frame.data, frame.len);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
-*/
+
+extern "C" void app_main(void) {
+    // 1. NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // 2. Startup (auto-start streaming, no button required)
+    startup_init();
+    startup_force_stream();
+
+    // 3. Boot log
+    ESP_LOGI(TAG, "=== Podles DSP Piano %s ===", FIRMWARE_VERSION);
+    ESP_LOGI(TAG, "role=dsp-stream  sample_rate=%d", BOARD_SAMPLE_RATE_HZ);
+    ESP_LOGI(TAG, "server_uri=%s", CONFIG_SERVER_URI);
+    ESP_LOGI(TAG, "capture_task->core1  stream_task->core0");
+
+    // 4. Wi-Fi STA
+    ESP_ERROR_CHECK(wifi_sta_init());
+
+    // 5. WebSocket streamer
+    ws_stream_config_t ws_cfg = {
+        .server_uri  = CONFIG_SERVER_URI,
+        .sample_rate = BOARD_SAMPLE_RATE_HZ,
+    };
+    ESP_ERROR_CHECK(ws_stream_init(&ws_cfg));
+
+    // 6. Ring buffer + framer
+    ringbuf_init(&s_ringbuf, s_rb_storage, 4096);
+    pcm_framer_init(&s_framer, BOARD_SAMPLE_RATE_HZ);
+    esp_hint_init(esp_hint_log_event, NULL, BOARD_SAMPLE_RATE_HZ);
+
+    // 7. Launch pinned tasks
+    xTaskCreatePinnedToCore(capture_task, "capture", 4096, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(stream_task,  "stream",  4096, NULL, 4, NULL, 0);
+
+    // 8. Metrics loop
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+        ws_stream_metrics_t m = ws_stream_get_metrics();
+        ESP_LOGI(TAG, "sent=%lu reconnects=%lu dropped=%lu",
+                 (unsigned long)m.frames_sent,
+                 (unsigned long)m.reconnects,
+                 (unsigned long)m.dropped_frames);
+    }
+}

@@ -1,0 +1,68 @@
+{
+  "scoreId": "draft-score-ppap",
+  "title": "Draft Full Score Example",
+  "pages": [
+    {
+      "pageId": "page-1",
+      "pageIndex": 0,
+      "pageNumber": 1,
+      "duration": 8,
+      "bars": [
+        {
+          "barId": "page-1-bar-1",
+          "barIndex": 0,
+          "startTime": 0,
+          "duration": 4,
+          "events": [
+            {
+              "eventId": "page-1-bar-1-event-1",
+              "time": 0,
+              "notes": [
+                { "noteId": "n-1", "note": "C4", "dur": 0.4, "hand": "right" },
+                { "noteId": "n-2", "midi": 48, "note": "C3", "dur": 1.5, "hand": "left" }
+              ]
+            },
+            {
+              "eventId": "page-1-bar-1-event-2",
+              "time": 0.5,
+              "notes": [
+                { "noteId": "n-3", "note": "E4", "dur": 0.4, "hand": "right" }
+              ]
+            }
+          ]
+        },
+        {
+          "barId": "page-1-bar-2",
+          "barIndex": 1,
+          "startTime": 4,
+          "duration": 4,
+          "notes": [
+            { "noteId": "n-4", "time": 0, "note": "G4", "dur": 0.4, "hand": "right" },
+            { "noteId": "n-5", "time": 0.01, "note": "C3", "dur": 1.2, "hand": "left" },
+            { "noteId": "n-6", "time": 0.5, "note": "A4", "dur": 0.4, "hand": "right" },
+            { "noteId": "n-7", "time": 0.5, "note": "A4", "dur": 0.4, "hand": "right" }
+          ]
+        }
+      ]
+    },
+    {
+      "pageId": "page-2",
+      "pageIndex": 1,
+      "pageNumber": 2,
+      "duration": 6,
+      "bars": [
+        {
+          "barId": "page-2-bar-1",
+          "barIndex": 0,
+          "events": [
+            {
+              "eventId": "page-2-bar-1-event-1",
+              "time": 0,
+              "midi": [62, 65, 62]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

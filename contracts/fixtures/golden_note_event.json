@@ -1,0 +1,10 @@
+{
+  "type": "note_on",
+  "midi": 69,
+  "onset_ms": 100,
+  "velocity": 80,
+  "confidence": 0.95,
+  "source": "server",
+  "session_id": "test-session-001",
+  "seq": 1
+}

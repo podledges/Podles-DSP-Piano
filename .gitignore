@@ -19,3 +19,8 @@ _autosave-*
 .vscode/
 .DS_Store
 .history/
+
+__pycache__/
+*.pyc
+*.pyo
+.venv*/

@@ -1,0 +1,119 @@
+:root {
+  --color-background: #f7f4eb;
+  --color-foreground: #1a1616;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #f1ebd9;
+  --color-text: #1a1616;
+  --color-text-muted: #685f5d;
+  --color-border: #dcd1ba;
+
+  --color-accent: #c82333;
+  --color-accent-hover: #9c1422;
+  --color-accent-muted: #fbf5f0;
+  --color-accent-gold: #c5a059;
+  --color-accent-gold-hover: #ab8741;
+  --color-accent-gold-muted: #2d271a;
+  --color-accent-foreground: #ffffff;
+
+  --color-background-dark: #161414;
+  --color-background-crimson: #8c0e1a;
+  --color-background-light: #fcfbf9;
+  --color-surface-dark: #1f1a1a;
+  --color-border-dark: #2e2a2a;
+  --color-text-dark: #ece7e7;
+  --color-text-muted-dark: #a8a29e;
+
+  /* Default Card styles */
+  --card-bg: var(--color-surface);
+  --card-text: var(--color-text);
+  --card-text-muted: var(--color-text-muted);
+  --card-border: var(--color-border);
+  --card-accent: var(--color-accent);
+  --card-accent-hover: var(--color-accent-hover);
+
+  --color-neutral-50:  #fdfcfb; /* Warmest off-white */
+  --color-neutral-100: #f7f4f0; /* Matches your hover */
+  --color-neutral-200: #eec;    /* Soft warm cream border */
+  --color-neutral-300: #e6dfdf; /* Matches your current border */
+  --color-neutral-400: #a8a29e; /* Soft stone */
+  --color-neutral-500: #8c8582; /* Mid warm gray */
+  --color-neutral-600: #685f5d; /* Matches your muted text */
+  --color-neutral-700: #4a4240; /* Dark chocolate gray */
+  --color-neutral-800: #2e2a2a; /* Matches dark border */
+  --color-neutral-900: #1a1616; /* Matches your text/foreground */
+  --color-neutral-950: #120f0f; /* Deepest warm black */
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-cormorant-garamond), serif;
+  --font-display: var(--font-birthstone), cursive;
+  --font-mono: var(--font-azeret-mono), monospace;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-neon: 0 0 15px var(--color-accent);
+
+  --transition-fast: 150ms;
+  --transition-normal: 250ms;
+  --transition-slow: 350ms;
+}
+
+.club-card {
+  background-color: var(--card-bg);
+  color: var(--card-text);
+  border: 1px solid var(--card-accent);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-normal) ease,
+              box-shadow var(--transition-normal) ease,
+              background-color var(--transition-normal) ease,
+              transform var(--transition-normal) ease;
+
+  /* Scoped color overrides for nested Tailwind classes */
+  --color-foreground: var(--card-text);
+  --color-text: var(--card-text);
+  --color-text-muted: var(--card-text-muted);
+  --color-border: var(--card-border);
+}
+
+.club-card:hover {
+  border-color: var(--card-accent-hover);
+  box-shadow: var(--shadow-lg), 0 0 15px var(--color-accent-muted);
+}
+
+.club-card-link {
+  color: var(--card-accent);
+}
+.club-card-link:hover {
+  color: var(--card-accent-hover);
+}
+
+.theme-crimson {
+  --color-accent: #c82333;
+  --color-accent-hover: #9c1422;
+  --color-accent-muted: #fbf5f0;
+}
+
+.focus-section {
+  background-color: var(--color-background-crimson);
+  color: var(--color-background-light);
+  --color-border: #a61a29;
+  
+  --color-text: var(--color-background-light);
+  --color-text-muted: #eec;
+  --color-surface: #9e1422;
+  
+  --color-accent: #ffffff;
+  --color-accent-hover: #fcfbf9;
+  --color-accent-muted: rgba(255, 255, 255, 0.15);
+}

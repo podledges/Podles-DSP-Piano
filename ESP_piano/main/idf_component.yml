@@ -1,2 +1,4 @@
 dependencies:
   espressif/esp-dsp: "^1.4.12"
+  # esp_websocket_client moved out of ESP-IDF core in v6.0; pull it as a managed component.
+  espressif/esp_websocket_client: "^1.5.0"
