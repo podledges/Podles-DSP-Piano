@@ -11,12 +11,14 @@ Endpoints:
   GET  /static/{f}  → serves server/static/ files
 
 Usage:
-  python server/app.py [--port 8000] [--transcriber fake|basic_pitch]
+  python server/app.py [--port 8000] [--transcriber fake|basic_pitch] [--nodejs-uri ws://localhost:8080]
 
 Architecture:
   ESP32-S3 (STA) → /stream websocket → AudioIngest → Transcriber → NoteBroadcaster → /notes websocket
-                                                                                      ↑
-                                               Mobile App / Browser connects here ────┘
+                                                                                       ↑
+                                                Mobile App / Browser connects here ────┘
+
+  Optional Node.js bridge forwards detected note_on events as 3-byte MIDI packets to ws://localhost:8080.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 
 if __package__ in (None, ""):
@@ -58,11 +60,53 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
 
 
+class NodeJsBridge:
+    """Forwards detected MIDI notes to the Node.js score-tracking server as 3-byte binary packets."""
+
+    def __init__(self, uri: str) -> None:
+        self._uri = uri
+        self._ws: Any | None = None
+        self._lock = asyncio.Lock()
+        self._enabled = bool(uri)
+
+    async def connect(self) -> None:
+        if not self._enabled:
+            return
+        try:
+            import websockets
+
+            self._ws = await websockets.connect(self._uri)
+            LOGGER.info("NodeJsBridge connected to %s", self._uri)
+        except Exception as exc:
+            LOGGER.warning("NodeJsBridge: could not connect to %s: %s", self._uri, exc)
+            self._ws = None
+
+    async def send_note(self, midi: int, velocity: int) -> None:
+        if not self._enabled or self._ws is None:
+            return
+        try:
+            _ = self._lock
+            await self._ws.send(bytes([0x90, midi & 0x7F, velocity & 0x7F]))
+        except Exception as exc:
+            LOGGER.warning("NodeJsBridge: send failed (%s), reconnecting", exc)
+            self._ws = None
+            await self.connect()
+
+    async def close(self) -> None:
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+
+
 class ServerRuntime:
     def __init__(self, transcriber: Transcriber, transcriber_name: str) -> None:
         self.transcriber: Transcriber = transcriber
         self.transcriber_name: str = transcriber_name
         self.broadcaster: NoteBroadcaster = NoteBroadcaster()
+        self.nodejs_bridge: NodeJsBridge | None = None
         self.ingest: AudioIngest = AudioIngest(self.feed_pcm)
         self.port: int | None = None
 
@@ -118,11 +162,15 @@ class ServerRuntime:
         self._active_session_id = session_id
 
 
-def create_app(transcriber_name: str = "fake") -> FastAPI:
+def create_app(transcriber_name: str = "fake", nodejs_uri: str = "") -> FastAPI:
     runtime = ServerRuntime(*load_transcriber(transcriber_name))
+    if nodejs_uri:
+        runtime.nodejs_bridge = NodeJsBridge(nodejs_uri)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+        if runtime.nodejs_bridge:
+            await runtime.nodejs_bridge.connect()
         poll_task = asyncio.create_task(_poll_notes(runtime), name="note-poll")
         LOGGER.info("Server ready on port %s", runtime.port if runtime.port is not None else "unknown")
         try:
@@ -133,6 +181,8 @@ def create_app(transcriber_name: str = "fake") -> FastAPI:
                 await poll_task
             except asyncio.CancelledError:
                 pass
+            if runtime.nodejs_bridge:
+                await runtime.nodejs_bridge.close()
             runtime.stop_session()
 
     app = FastAPI(title="Podles DSP Piano v2 Laptop Server", version=VERSION, lifespan=lifespan)
@@ -186,6 +236,11 @@ async def _poll_notes(runtime: ServerRuntime) -> None:
     while True:
         for event in runtime.poll_events():
             runtime.broadcaster.broadcast(event)
+            if runtime.nodejs_bridge and hasattr(event, 'type') and event.type == 'note_on':
+                midi = getattr(event, 'midi', None)
+                velocity = getattr(event, 'velocity', None) or 80
+                if midi is not None:
+                    await runtime.nodejs_bridge.send_note(int(midi), int(velocity))
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -234,6 +289,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Podles DSP Piano v2 laptop server")
     _ = parser.add_argument("--port", type=int, default=8000)
     _ = parser.add_argument("--transcriber", choices=("fake", "basic_pitch"), default="fake")
+    _ = parser.add_argument(
+        "--nodejs-uri",
+        default="",
+        help="WebSocket URI of the Node.js server (e.g. ws://localhost:8080). Empty = disabled.",
+    )
     return parser.parse_args(argv)
 
 
@@ -242,7 +302,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     port = int(args.port)
     transcriber_name = str(args.transcriber)
-    server_app = create_app(transcriber_name)
+    server_app = create_app(transcriber_name, nodejs_uri=args.nodejs_uri)
     cast(ServerRuntime, server_app.state.runtime).port = port
     uvicorn.run(server_app, host="0.0.0.0", port=port)
 

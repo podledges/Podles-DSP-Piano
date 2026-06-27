@@ -1,0 +1,24 @@
+// This config silences the VS Code IntelliSense squiggle for freertos/FreeRTOS.h.
+// The warning is editor-only and does not affect `idf.py build`; ESP-IDF CMake
+// still owns the real include resolution. After opening the project, run
+// "ESP-IDF: Add vscode configuration folder" for the most accurate paths, or
+// ensure `IDF_PATH` is set in the environment.
+{
+    "configurations": [
+        {
+            "name": "ESP-IDF",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${env:IDF_PATH}/components/**",
+                "${env:IDF_PATH}/components/freertos/FreeRTOS-Kernel/include/**",
+                "${env:IDF_PATH}/components/esp_common/include/**"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": ""
+        }
+    ],
+    "version": 4
+}
