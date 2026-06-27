@@ -6,11 +6,19 @@
 
 ## Introduction 
 
-### The issue
+### The trivial issue
 
 The *most notable* issue that has bugged piano players alike - HAving to turb the page midinputs. 
 
 Its such a simple problem, yet everlooming. Especially since we value freedom when 'playing around' on the piano, this issue seems to occur randomly, we are not neccessarily willing to be 'locked in' sightreading random sheets online. More like mindlessly practicing, inbetween tasks, where navigating through a mobile app with a cluttered ui - is too inconvenient (given the mindlessness). **With our specific trained algorithim,** decting the seequence of notes leading up to a page turn, where the algorithim, seamlessly rolls over to the next page (*with a near zero misturn rate.*)
+
+### The fundamental problem
+
+The page turn is an accepted phenomena in the performing arts, and it is only really an issue, depending on the music score. However, the real issue we are trying to solve - mindless playing. 
+> we are not trying to stop mindless playing, however, we propose the capability of added 'smart features' to any acoustic or digital piano, that guides the pianist to mindlessly learn and play more effective! whilst minimizing UI and annoyance.
+
+
+
 
 > PROBLEM:  PIANO PLAYING PIECE, with sheet on IPAD (common today), i reach the end of my bar and page, have to swipe up on ipad --> swiping up breaks the whole tempo and movment -
 > 	> THIS ISSUE IS WHY PROS ARE STILL RELYING ON PHYSICAL SHEET MUSIC
