@@ -1,0 +1,15 @@
+{
+  "type": "frequency_event",
+  "eventId": 301,
+  "timestampMs": 28510,
+  "peaks": [
+    {
+      "frequencyHz": 130.9,
+      "magnitude": 0.88
+    },
+    {
+      "frequencyHz": 261.5,
+      "magnitude": 0.79
+    }
+  ]
+}

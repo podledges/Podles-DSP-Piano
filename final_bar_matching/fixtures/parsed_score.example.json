@@ -1,0 +1,32 @@
+{
+  "notes": [
+    {
+      "time": 0,
+      "midi": 60,
+      "note": "C4",
+      "dur": 0.4,
+      "hand": "right"
+    },
+    {
+      "time": 0,
+      "midi": 48,
+      "note": "C3",
+      "dur": 1.5,
+      "hand": "left"
+    },
+    {
+      "time": 0.4,
+      "midi": 64,
+      "note": "E4",
+      "dur": 0.4,
+      "hand": "right"
+    },
+    {
+      "time": 0.8,
+      "midi": 67,
+      "note": "G4",
+      "dur": 0.4,
+      "hand": "right"
+    }
+  ]
+}

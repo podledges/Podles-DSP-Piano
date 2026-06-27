@@ -111,7 +111,7 @@ void web_server_send_midi_packet(uint8_t status, uint8_t note, uint8_t velocity)
 
     size_t max_fds = 8;
     int fds[8] = {0};
-    esp_err_t ret = httpd_sess_get_fds(server, &max_fds, fds);
+    esp_err_t ret = httpd_get_client_list(server, &max_fds, fds);
     if (ret != ESP_OK) return;
 
     uint8_t buf[3] = { status, note, velocity };
@@ -138,40 +138,36 @@ void start_web_server(void) {
     if (httpd_start(&server, &config) == ESP_OK) {
         
         // 1. Register Index Route
-        httpd_uri_t index_uri = {
-            .uri       = "/",
-            .method    = HTTP_GET,
-            .handler   = index_html_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t index_uri = {};
+        index_uri.uri       = "/";
+        index_uri.method    = HTTP_GET;
+        index_uri.handler   = index_html_handler;
+        index_uri.user_ctx  = NULL;
         httpd_register_uri_handler(server, &index_uri);
 
         // 2. Register CSS Route
-        httpd_uri_t css_uri = {
-            .uri       = "/style.css",
-            .method    = HTTP_GET,
-            .handler   = style_css_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t css_uri = {};
+        css_uri.uri       = "/style.css";
+        css_uri.method    = HTTP_GET;
+        css_uri.handler   = style_css_handler;
+        css_uri.user_ctx  = NULL;
         httpd_register_uri_handler(server, &css_uri);
 
         // 3. Register JS Route
-        httpd_uri_t js_uri = {
-            .uri       = "/app.js",
-            .method    = HTTP_GET,
-            .handler   = app_js_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t js_uri = {};
+        js_uri.uri       = "/app.js";
+        js_uri.method    = HTTP_GET;
+        js_uri.handler   = app_js_handler;
+        js_uri.user_ctx  = NULL;
         httpd_register_uri_handler(server, &js_uri);
 
         // 4. Register WebSocket Route
-        httpd_uri_t ws_uri = {
-            .uri        = "/ws",
-            .method     = HTTP_GET,
-            .handler    = ws_handler,
-            .user_ctx   = NULL,
-            .is_websocket = true
-        };
+        httpd_uri_t ws_uri = {};
+        ws_uri.uri        = "/ws";
+        ws_uri.method     = HTTP_GET;
+        ws_uri.handler    = ws_handler;
+        ws_uri.user_ctx   = NULL;
+        ws_uri.is_websocket = true;
         httpd_register_uri_handler(server, &ws_uri);
 
         ESP_LOGI(TAG, "Web Server routes registered successfully.");

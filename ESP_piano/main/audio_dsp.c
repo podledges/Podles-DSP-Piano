@@ -7,6 +7,7 @@
 #include "dsps_wind.h"  
 #include <math.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 static const char *TAG = "DSP_MODULE";
 
@@ -36,9 +37,29 @@ static const char *note_names[12] = {
 };
 
 /* Private Helper Functions */
+static bool debounce_note_selection(int current_midi_note);
 static inline float remove_dc_offset(float sample) {
     dc_bias = 0.999f * dc_bias + 0.001f * sample;
     return sample - dc_bias;
+}
+
+static void frequency_to_note(float frequency_hz, char *output_string, size_t output_size) {
+    float midi_value = 69.0f + 12.0f * log2f(frequency_hz / 440.0f);
+    int midi_rounded = (int)(midi_value + 0.5f);
+    int octave_number = (midi_rounded / 12) - 1;
+    const char *note_name = note_names[midi_rounded % 12];
+    float cents_deviation = (midi_value - midi_rounded) * 100.0f;
+    snprintf(output_string, output_size, "%s%d (%+.0f cents)", note_name, octave_number, cents_deviation);
+}
+
+static bool debounce_note_selection(int current_midi_note) {
+    if (current_midi_note == last_candidate_midi) {
+        candidate_repeat_count++;
+    } else {
+        last_candidate_midi = current_midi_note;
+        candidate_repeat_count = 1;
+    }
+    return (candidate_repeat_count >= NOTE_DEBOUNCE_FRAMES);
 }
 
 
@@ -111,25 +132,6 @@ void process_audio_frame(const float* sample_buffer, uint32_t signal_amplitude_m
 /* deprecated functions */
 
 /* 
-static void frequency_to_note(float frequency_hz, char *output_string, size_t output_size) {
-    float midi_value = 69.0f + 12.0f * log2f(frequency_hz / 440.0f);
-    int midi_rounded = (int)(midi_value + 0.5f);
-    int octave_number = (midi_rounded / 12) - 1;
-    const char *note_name = note_names[midi_rounded % 12];
-    float cents_deviation = (midi_value - midi_rounded) * 100.0f;
-    snprintf(output_string, output_size, "%s%d (%+.0f cents)", note_name, octave_number, cents_deviation);
-}
-
-static bool debounce_note_selection(int current_midi_note) {
-    if (current_midi_note == last_candidate_midi) {
-        candidate_repeat_count++;
-    } else {
-        last_candidate_midi = current_midi_note;
-        candidate_repeat_count = 1;
-    }
-    return (candidate_repeat_count >= NOTE_DEBOUNCE_FRAMES);
-}
-
 static void run_fft_frame(const float* sample_buffer) {
 
     // proccesses first few (FFT_SIZE) samples in sample_buffer
@@ -176,4 +178,4 @@ static void run_fft_frame(const float* sample_buffer) {
         hold_peak_signal_to_noise_ratio = signal_to_noise_ratio;
     }
 }
-    */
+*/
