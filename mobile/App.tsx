@@ -9,8 +9,11 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as DocumentPicker from 'expo-document-picker';
+import { WebView } from 'react-native-webview';
 
 // Interface for telemetry logs
 interface LogEntry {
@@ -34,10 +37,30 @@ export default function App() {
   const [status, setStatus] = useState<'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'>('DISCONNECTED');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeKeys, setActiveKeys] = useState<{ [midi: number]: 'left' | 'right' | 'local' }>({});
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
+  const [isDemoPlaying, setIsDemoPlaying] = useState<boolean>(false);
+
+  // PDF & Mock OMR states
+  const [pdfUri, setPdfUri] = useState<string | null>(null);
+  const [pdfName, setPdfName] = useState<string | null>(null);
+  const [pdfPageCount, setPdfPageCount] = useState<number>(1);
+  const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [transcribedData, setTranscribedData] = useState<any>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const logScrollRef = useRef<ScrollView | null>(null);
   const keyTimeouts = useRef<{ [midi: number]: any }>({});
+  const demoIntervalRef = useRef<any>(null);
+  const demoSequenceIndex = useRef<number>(0);
+
+  // Ode to Joy melody (transposed to C4 - E5 range for virtual piano visualization)
+  const DEMO_MELODY = [
+    64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64, 64, 62, 62,
+    64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64, 62, 60, 60,
+    62, 62, 64, 60, 62, 64, 65, 64, 60, 62, 64, 65, 64, 62, 60, 62, 67,
+    64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64, 62, 60, 60
+  ];
 
   // Helper to add system logs
   const addLog = (msg: string, type: LogEntry['type'] = 'SYS') => {
@@ -59,15 +82,23 @@ export default function App() {
     }
   }, [logs]);
 
-  // Clean up timeouts on unmount
+  // Clean up timeouts/intervals on unmount
   useEffect(() => {
     return () => {
       Object.values(keyTimeouts.current).forEach(clearTimeout);
+      if (demoIntervalRef.current) {
+        clearInterval(demoIntervalRef.current);
+      }
     };
   }, []);
 
   // Connect to laptop server WebSocket
   const connectEsp = () => {
+    if (isDemoMode) {
+      addLog('Cannot connect to server in Demo Mode. Switch to Laptop Server Mode first.', 'ERR');
+      return;
+    }
+
     if (wsRef.current) {
       addLog('Closing existing WebSocket connection...');
       wsRef.current.close();
@@ -75,7 +106,7 @@ export default function App() {
     }
 
     if (!ip.trim()) {
-      addLog('Please enter a valid IP address.', 'ERR');
+      addLog('Please enter a valid server address (IP:PORT).', 'ERR');
       return;
     }
 
@@ -93,19 +124,48 @@ export default function App() {
 
       ws.onclose = () => {
         setStatus('DISCONNECTED');
-        addLog('Connection closed.', 'SYS');
+        addLog('Connection to server closed.', 'SYS');
         wsRef.current = null;
       };
 
       ws.onerror = (e) => {
         setStatus('DISCONNECTED');
-        addLog('WebSocket error occurred. Verify IP and connection.', 'ERR');
+        addLog('WebSocket error occurred. Verify server address and connection.', 'ERR');
         console.error(e);
         wsRef.current = null;
       };
 
       ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
+        if (typeof event.data === 'string') {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'NOTE_PLAYED') {
+              const note = data.midi;
+              const hand = data.hand || 'right';
+              addLog(`RX Note (JSON): Midi=${note}, Hand=${hand}`, 'WS_RX');
+              
+              setActiveKeys((prev) => ({ ...prev, [note]: hand }));
+              if (keyTimeouts.current[note]) {
+                clearTimeout(keyTimeouts.current[note]);
+              }
+              keyTimeouts.current[note] = setTimeout(() => {
+                setActiveKeys((prev) => {
+                  const updated = { ...prev };
+                  delete updated[note];
+                  return updated;
+                });
+              }, 400);
+            } else if (data.type === 'PAGE_TURN') {
+              const pageNum = data.pageNumber;
+              addLog(`RX Event: PAGE_TURN to page ${pageNum}`, 'WS_RX');
+              setPdfCurrentPage(pageNum);
+            } else if (data.type === 'SCORE_COMPLETED') {
+              addLog(`RX Event: SCORE_COMPLETED!`, 'WS_RX');
+            }
+          } catch (err: any) {
+            addLog(`WS Message Parse Error: ${err.message}`, 'ERR');
+          }
+        } else if (event.data instanceof ArrayBuffer) {
           const view = new DataView(event.data);
           if (view.byteLength >= 3) {
             const statusByte = view.getUint8(0);
@@ -115,10 +175,8 @@ export default function App() {
             addLog(`RX Note: Status=0x${statusByte.toString(16).toUpperCase()}, Note=${note}, Velocity=${velocity}`, 'WS_RX');
 
             if (statusByte === 0x90 && velocity > 0) {
-              // Highlight key (simulate right hand cyan highlight)
               setActiveKeys((prev) => ({ ...prev, [note]: 'right' }));
 
-              // Auto release key after 400ms to avoid sticky pitch detections
               if (keyTimeouts.current[note]) {
                 clearTimeout(keyTimeouts.current[note]);
               }
@@ -168,7 +226,16 @@ export default function App() {
   // Local Key Press Handlers
   const handleKeyPress = (midi: number) => {
     setActiveKeys((prev) => ({ ...prev, [midi]: 'local' }));
-    sendMidiToESP32(0x90, midi, 100);
+    if (isDemoMode) {
+      addLog(`TX Note (MOCK): Status=0x90, Note=${midi}, Velocity=100`, 'WS_TX');
+      // Simulate DSP board echoing note back to visual keyboard over network
+      setTimeout(() => {
+        setActiveKeys((prev) => ({ ...prev, [midi]: 'right' }));
+        addLog(`RX Note (MOCK): Status=0x90, Note=${midi}, Velocity=100`, 'WS_RX');
+      }, 80);
+    } else {
+      sendMidiToESP32(0x90, midi, 100);
+    }
   };
 
   const handleKeyRelease = (midi: number) => {
@@ -177,7 +244,14 @@ export default function App() {
       delete updated[midi];
       return updated;
     });
-    sendMidiToESP32(0x80, midi, 0);
+    if (isDemoMode) {
+      addLog(`TX Note (MOCK): Status=0x80, Note=${midi}, Velocity=0`, 'WS_TX');
+      setTimeout(() => {
+        addLog(`RX Note (MOCK): Status=0x80, Note=${midi}, Velocity=0`, 'WS_RX');
+      }, 80);
+    } else {
+      sendMidiToESP32(0x80, midi, 0);
+    }
   };
 
   // Keyboard mapping definitions (MIDI 60 to 76)
@@ -217,12 +291,34 @@ export default function App() {
             <Text style={styles.title}>DSP PIANO LINK</Text>
             <Text style={styles.subtitle}>Mobile Controller // TypeScript</Text>
           </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>EXPO GO</Text>
+          <View style={[styles.badge, isDemoMode ? styles.badgeDemo : styles.badgeLive]}>
+            <Text style={[styles.badgeText, !isDemoMode && styles.badgeTextLive]}>
+              {isDemoMode ? 'DEMO MODE' : 'LIVE LINK'}
+            </Text>
           </View>
         </View>
 
-        {/* CONNECTION PANEL */}
+        {/* MODE SELECTOR */}
+        <View style={styles.modeContainer}>
+          <TouchableOpacity
+            style={[styles.modeButton, isDemoMode && styles.modeButtonActive]}
+            onPress={() => handleModeChange(true)}
+          >
+            <Text style={[styles.modeButtonText, isDemoMode && styles.modeButtonTextActive]}>
+              MOCK DEMO MODE
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeButton, !isDemoMode && styles.modeButtonActive]}
+            onPress={() => handleModeChange(false)}
+          >
+            <Text style={[styles.modeButtonText, !isDemoMode && styles.modeButtonTextActive]}>
+              LAPTOP SERVER LINK
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* CONNECTION / DEMO CONTROL PANEL */}
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>1. WebSocket Link</Text>
           <View style={styles.connectionRow}>
@@ -238,43 +334,187 @@ export default function App() {
                 autoCapitalize="none"
               />
             </View>
+          ) : (
+            <View>
+              <Text style={styles.panelTitle}>1. WebSocket Link</Text>
+              <View style={styles.connectionRow}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Laptop Server Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={ip}
+                    onChangeText={setIp}
+                    placeholder="localhost:8080"
+                    placeholderTextColor="#5A626A"
+                    autoCapitalize="none"
+                  />
+                </View>
 
-            <TouchableOpacity
-              style={[
-                styles.button,
-                status === 'CONNECTED' ? styles.buttonDisconnect : styles.buttonConnect
-              ]}
-              onPress={status === 'CONNECTED' ? disconnectEsp : connectEsp}
-              disabled={status === 'CONNECTING'}
-            >
-              <Text style={styles.buttonText}>
-                {status === 'CONNECTED' ? 'Disconnect' : status === 'CONNECTING' ? 'Linking...' : 'Connect'}
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    status === 'CONNECTED' ? styles.buttonDisconnect : styles.buttonConnect
+                  ]}
+                  onPress={status === 'CONNECTED' ? disconnectEsp : connectEsp}
+                  disabled={status === 'CONNECTING'}
+                >
+                  <Text style={[styles.buttonText, status !== 'CONNECTED' && styles.buttonTextConnect]}>
+                    {status === 'CONNECTED' ? 'Disconnect' : status === 'CONNECTING' ? 'Linking...' : 'Connect'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statusContainer}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    status === 'CONNECTED'
+                      ? styles.statusDotConnected
+                      : status === 'CONNECTING'
+                      ? styles.statusDotConnecting
+                      : styles.statusDotDisconnected
+                  ]}
+                />
+                <Text style={styles.statusText}>
+                  Status: <Text style={styles.statusHighlight}>{status}</Text>
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* 2. SHEET MUSIC VIEWPORT */}
+        <View style={styles.panel}>
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.panelTitle}>2. Sheet Music PDF</Text>
+            <View style={styles.sheetActionButtons}>
+              <TouchableOpacity style={styles.btnSmall} onPress={handlePickPdf}>
+                <Text style={styles.btnSmallText}>Upload PDF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSmallSecondary} onPress={handleLoadMockSheet}>
+                <Text style={styles.btnSmallTextSecondary}>Load Mock</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Connection Status indicator */}
-          <View style={styles.statusContainer}>
-            <View
-              style={[
-                styles.statusDot,
-                status === 'CONNECTED'
-                  ? styles.statusDotConnected
-                  : status === 'CONNECTING'
-                  ? styles.statusDotConnecting
-                  : styles.statusDotDisconnected
-              ]}
-            />
-            <Text style={styles.statusText}>
-              Status: <Text style={styles.statusHighlight}>{status}</Text>
-            </Text>
-          </View>
+          {pdfUri ? (
+            <View style={styles.sheetViewerWrapper}>
+              <View style={styles.pdfArea}>
+                {pdfUri === 'MOCK_URI' ? (
+                  <View style={styles.sheetMockContainer}>
+                    <View style={styles.sheetMockHeader}>
+                      <Text style={styles.sheetMockTitle}>{pdfName}</Text>
+                      <Text style={styles.sheetMockPageInfo}>Page {pdfCurrentPage} of {pdfPageCount}</Text>
+                    </View>
+                    
+                    <View style={styles.staffContainer}>
+                      <Text style={styles.clefSymbol}>𝄞</Text>
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      
+                      {pdfCurrentPage === 1 ? (
+                        <View style={styles.notesContainer}>
+                          <View style={[styles.noteCircle, { left: 45, top: 12 }]}><Text style={styles.noteLabelInside}>E4</Text></View>
+                          <View style={[styles.noteCircle, { left: 85, top: 12 }]}><Text style={styles.noteLabelInside}>E4</Text></View>
+                          <View style={[styles.noteCircle, { left: 125, top: 8 }]}><Text style={styles.noteLabelInside}>F4</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 4 }]}><Text style={styles.noteLabelInside}>G4</Text></View>
+                          <View style={[styles.noteCircle, { left: 205, top: 4 }]}><Text style={styles.noteLabelInside}>G4</Text></View>
+                        </View>
+                      ) : (
+                        <View style={styles.notesContainer}>
+                          <View style={[styles.noteCircle, { left: 45, top: 16 }]}><Text style={styles.noteLabelInside}>D4</Text></View>
+                          <View style={[styles.noteCircle, { left: 85, top: 16 }]}><Text style={styles.noteLabelInside}>D4</Text></View>
+                          <View style={[styles.noteCircle, { left: 125, top: 12 }]}><Text style={styles.noteLabelInside}>E4</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 20 }]}><Text style={styles.noteLabelInside}>C4</Text></View>
+                          <View style={[styles.noteCircle, { left: 205, top: 16 }]}><Text style={styles.noteLabelInside}>D4</Text></View>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={[styles.staffContainer, { marginTop: 30 }]}>
+                      <Text style={styles.clefSymbol}>𝄢</Text>
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      <View style={styles.staffLine} />
+                      
+                      {pdfCurrentPage === 1 ? (
+                        <View style={styles.notesContainer}>
+                          <View style={[styles.noteCircle, { left: 45, top: 8 }]}><Text style={styles.noteLabelInside}>C3</Text></View>
+                          <View style={[styles.noteCircle, { left: 45, top: 16 }]}><Text style={styles.noteLabelInside}>E3</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 0 }]}><Text style={styles.noteLabelInside}>G3</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 12 }]}><Text style={styles.noteLabelInside}>D3</Text></View>
+                        </View>
+                      ) : (
+                        <View style={styles.notesContainer}>
+                          <View style={[styles.noteCircle, { left: 45, top: 4 }]}><Text style={styles.noteLabelInside}>F3</Text></View>
+                          <View style={[styles.noteCircle, { left: 45, top: 12 }]}><Text style={styles.noteLabelInside}>A3</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 8 }]}><Text style={styles.noteLabelInside}>E3</Text></View>
+                          <View style={[styles.noteCircle, { left: 165, top: 16 }]}><Text style={styles.noteLabelInside}>G3</Text></View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ) : (
+                  <WebView
+                    source={{ uri: pdfUri }}
+                    style={styles.pdfWebView}
+                    originWhitelist={['*']}
+                    allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
+                    allowUniversalAccessFromFileURLs={true}
+                  />
+                )}
+              </View>
+
+              <View style={styles.pdfControlsRow}>
+                <View style={styles.pdfPagination}>
+                  <TouchableOpacity 
+                    style={[styles.btnPage, pdfCurrentPage === 1 && styles.btnPageDisabled]} 
+                    onPress={() => setPdfCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={pdfCurrentPage === 1}
+                  >
+                    <Text style={styles.btnPageText}>◀</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.pdfPageIndicator}>
+                    Page {pdfCurrentPage} / {pdfPageCount}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[styles.btnPage, pdfCurrentPage === pdfPageCount && styles.btnPageDisabled]} 
+                    onPress={() => setPdfCurrentPage(p => Math.min(pdfPageCount, p + 1))}
+                    disabled={pdfCurrentPage === pdfPageCount}
+                  >
+                    <Text style={styles.btnPageText}>▶</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.btnTranscribe, isTranscribing && styles.btnTranscribeActive]} 
+                  onPress={handleTranscribePage}
+                  disabled={isTranscribing}
+                >
+                  {isTranscribing ? (
+                    <ActivityIndicator size="small" color="#161414" />
+                  ) : (
+                    <Text style={styles.btnTranscribeText}>Transcribe Page (MOCK AI)</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.pdfEmptyState}>
+              <Text style={styles.pdfEmptyText}>No sheet music loaded. Upload a PDF or load the mock sheet.</Text>
+            </View>
+          )}
         </View>
 
         {/* TELEMETRY CONSOLE PANEL */}
         <View style={[styles.panel, styles.telemetryPanel]}>
           <View style={styles.telemetryHeader}>
-            <Text style={styles.panelTitle}>2. Live Telemetry Console</Text>
+            <Text style={styles.panelTitle}>3. Live Telemetry Console</Text>
             <TouchableOpacity onPress={() => setLogs([])}>
               <Text style={styles.clearLogsText}>Clear Logs</Text>
             </TouchableOpacity>
@@ -286,7 +526,11 @@ export default function App() {
             contentContainerStyle={styles.logContent}
           >
             {logs.length === 0 ? (
-              <Text style={styles.emptyLogText}>[Ready] Awaiting telemetry or WebSocket connection...</Text>
+              <Text style={styles.emptyLogText}>
+                {isDemoMode 
+                  ? '[Ready] Mock Mode is active. Play a song or press keys to see logs...'
+                  : '[Ready] Awaiting telemetry or WebSocket connection...'}
+              </Text>
             ) : (
               logs.map((log) => (
                 <View key={log.id} style={styles.logRow}>
@@ -314,7 +558,7 @@ export default function App() {
 
         {/* PIANO KEYBOARD SECTION */}
         <View style={styles.keyboardPanel}>
-          <Text style={styles.keyboardTitle}>3. Interactive Keyboard</Text>
+          <Text style={styles.keyboardTitle}>4. Interactive Keyboard</Text>
           
           <View style={styles.keyboardWrapper}>
             <ScrollView
@@ -373,7 +617,7 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#121416',
+    backgroundColor: '#161414', // --color-background-dark
   },
   container: {
     flex: 1,
@@ -384,48 +628,83 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C3136',
+    borderBottomColor: '#2e2a2a', // --color-border-dark
     paddingBottom: 12,
   },
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     letterSpacing: 1,
   },
   subtitle: {
     fontSize: 10,
-    color: '#8A929A',
+    color: '#a8a29e', // --color-text-muted-dark
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 2,
   },
   badge: {
-    backgroundColor: '#00f5d4',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
+  badgeDemo: {
+    backgroundColor: '#c5a059', // --color-accent-gold
+  },
+  badgeLive: {
+    backgroundColor: '#c82333', // --color-accent
+  },
   badgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#121416',
+    color: '#161414', // dark text on gold badge
+  },
+  badgeTextLive: {
+    color: '#ece7e7', // light text on crimson badge
+  },
+  modeContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1f1a1a', // --color-surface-dark
+    borderRadius: 6,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#2e2a2a', // --color-border-dark
+    marginBottom: 14,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 4,
+  },
+  modeButtonActive: {
+    backgroundColor: '#c5a059', // --color-accent-gold
+  },
+  modeButtonText: {
+    color: '#a8a29e', // --color-text-muted-dark
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  modeButtonTextActive: {
+    color: '#161414', // dark text on gold background
   },
   panel: {
-    backgroundColor: '#1A1D20',
+    backgroundColor: '#1f1a1a', // --color-surface-dark
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2C3136',
-    marginBottom: 16,
+    borderColor: '#2e2a2a', // --color-border-dark
+    marginBottom: 14,
   },
   panelTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 12,
@@ -435,43 +714,67 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 12,
   },
+  demoControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  demoInfo: {
+    flex: 1,
+  },
+  demoInfoTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ece7e7',
+    marginBottom: 2,
+  },
+  demoInfoText: {
+    fontSize: 11,
+    color: '#a8a29e',
+    lineHeight: 14,
+  },
   inputContainer: {
     flex: 1,
   },
   inputLabel: {
     fontSize: 11,
-    color: '#8A929A',
+    color: '#a8a29e', // --color-text-muted-dark
     marginBottom: 6,
     fontWeight: '600',
   },
   input: {
-    backgroundColor: '#121416',
+    backgroundColor: '#161414', // --color-background-dark
     borderWidth: 1,
-    borderColor: '#2C3136',
+    borderColor: '#2e2a2a', // --color-border-dark
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     fontSize: 14,
   },
   button: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
     height: 42,
+    minWidth: 100,
   },
   buttonConnect: {
-    backgroundColor: '#00f5d4',
+    backgroundColor: '#c5a059', // --color-accent-gold
   },
   buttonDisconnect: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#c82333', // --color-accent (Crimson)
   },
   buttonText: {
-    color: '#121416',
-    fontSize: 14,
+    color: '#ece7e7', // --color-text-dark for disconnect/default
+    fontSize: 13,
     fontWeight: '700',
+  },
+  buttonTextConnect: {
+    color: '#161414', // Dark text on gold button
   },
   statusContainer: {
     flexDirection: 'row',
@@ -485,21 +788,22 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotDisconnected: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#c82333', // --color-accent (Crimson)
   },
   statusDotConnecting: {
-    backgroundColor: '#FFCC00',
+    backgroundColor: '#c5a059', // --color-accent-gold (for transition)
+    opacity: 0.6,
   },
   statusDotConnected: {
-    backgroundColor: '#00f5d4',
+    backgroundColor: '#c5a059', // --color-accent-gold
   },
   statusText: {
     fontSize: 12,
-    color: '#8A929A',
+    color: '#a8a29e', // --color-text-muted-dark
     fontWeight: '600',
   },
   statusHighlight: {
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     fontWeight: '700',
   },
   telemetryPanel: {
@@ -514,24 +818,25 @@ const styles = StyleSheet.create({
   },
   clearLogsText: {
     fontSize: 11,
-    color: '#00f5d4',
+    color: '#c5a059', // --color-accent-gold
     fontWeight: '600',
   },
   logContainer: {
     flex: 1,
-    backgroundColor: '#121416',
+    backgroundColor: '#161414', // --color-background-dark
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#2C3136',
+    borderColor: '#2e2a2a', // --color-border-dark
     padding: 8,
   },
   logContent: {
     paddingBottom: 8,
   },
   emptyLogText: {
-    color: '#5A626A',
+    color: '#a8a29e', // --color-text-muted-dark
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    opacity: 0.6,
   },
   logRow: {
     flexDirection: 'row',
@@ -539,10 +844,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   logTime: {
-    color: '#5A626A',
+    color: '#a8a29e', // --color-text-muted-dark
     fontSize: 10,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     marginRight: 6,
+    opacity: 0.6,
   },
   logType: {
     fontSize: 10,
@@ -552,42 +858,42 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   logRx: {
-    color: '#00f5d4',
+    color: '#c5a059', // --color-accent-gold
   },
   logTx: {
-    color: '#9E00FF',
+    color: '#c82333', // --color-accent (Crimson)
   },
   logSys: {
-    color: '#8A929A',
+    color: '#a8a29e', // --color-text-muted-dark
   },
   logErr: {
-    color: '#FF3B30',
+    color: '#c82333', // --color-accent (Crimson)
   },
   logMsg: {
     flex: 1,
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   keyboardPanel: {
     marginTop: 'auto',
-    marginBottom: 10,
+    marginBottom: 4,
   },
   keyboardTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#ece7e7', // --color-text-dark
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
   },
   keyboardWrapper: {
-    backgroundColor: '#1A1D20',
+    backgroundColor: '#1f1a1a', // --color-surface-dark
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: '#2C3136',
+    borderColor: '#2e2a2a', // --color-border-dark
   },
   keyboardScrollContainer: {
     paddingRight: 10,
@@ -600,32 +906,32 @@ const styles = StyleSheet.create({
   whiteKey: {
     width: WHITE_KEY_WIDTH,
     height: KEYBOARD_HEIGHT,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#121416',
+    borderColor: '#161414',
     borderRadius: 4,
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingBottom: 8,
   },
   whiteKeyActiveRx: {
-    backgroundColor: '#00f5d4',
+    backgroundColor: '#c5a059', // --color-accent-gold
   },
   whiteKeyActiveLocal: {
-    backgroundColor: '#FF9500',
+    backgroundColor: '#c82333', // --color-accent (Crimson)
   },
   keyLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#121416',
+    color: '#161414',
   },
   blackKey: {
     position: 'absolute',
     width: BLACK_KEY_WIDTH,
     height: KEYBOARD_HEIGHT * 0.6,
-    backgroundColor: '#121416',
+    backgroundColor: '#161414',
     borderWidth: 1,
-    borderColor: '#2C3136',
+    borderColor: '#2e2a2a',
     borderRadius: 3,
     zIndex: 10,
     justifyContent: 'flex-end',
@@ -633,14 +939,195 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   blackKeyActiveRx: {
-    backgroundColor: '#00f5d4',
+    backgroundColor: '#c5a059', // --color-accent-gold
   },
   blackKeyActiveLocal: {
-    backgroundColor: '#FF9500',
+    backgroundColor: '#c82333', // --color-accent (Crimson)
   },
   blackKeyLabel: {
     fontSize: 8,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#ece7e7',
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sheetActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  btnSmall: {
+    backgroundColor: '#c5a059',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  btnSmallSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#2e2a2a',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  btnSmallText: {
+    color: '#161414',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  btnSmallTextSecondary: {
+    color: '#ece7e7',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sheetViewerWrapper: {
+    width: '100%',
+  },
+  pdfArea: {
+    height: 220,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#2e2a2a',
+  },
+  pdfWebView: {
+    flex: 1,
+  },
+  sheetMockContainer: {
+    flex: 1,
+    backgroundColor: '#f7f4eb', // warm cream background from token.css
+    padding: 12,
+    justifyContent: 'center',
+  },
+  sheetMockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcd1ba',
+    paddingBottom: 4,
+    marginBottom: 16,
+  },
+  sheetMockTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1a1616',
+  },
+  sheetMockPageInfo: {
+    fontSize: 9,
+    fontFamily: 'monospace',
+    color: '#685f5d',
+  },
+  staffContainer: {
+    height: 48,
+    position: 'relative',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  clefSymbol: {
+    position: 'absolute',
+    left: 4,
+    top: 4,
+    fontSize: 34,
+    color: '#1a1616',
+    zIndex: 1,
+  },
+  staffLine: {
+    height: 1,
+    backgroundColor: '#1a1616',
+    width: '100%',
+    opacity: 0.8,
+  },
+  notesContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+  },
+  noteCircle: {
+    position: 'absolute',
+    width: 18,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#1a1616',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-15deg' }],
+  },
+  noteLabelInside: {
+    color: '#f7f4eb',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
+  pdfControlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  pdfPagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  btnPage: {
+    width: 28,
+    height: 28,
+    backgroundColor: '#1f1a1a',
+    borderWidth: 1,
+    borderColor: '#2e2a2a',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPageDisabled: {
+    opacity: 0.3,
+  },
+  btnPageText: {
+    color: '#ece7e7',
+    fontSize: 10,
+  },
+  pdfPageIndicator: {
+    color: '#a8a29e',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  btnTranscribe: {
+    flex: 1,
+    backgroundColor: '#c5a059',
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnTranscribeActive: {
+    backgroundColor: '#a8a29e',
+    opacity: 0.5,
+  },
+  btnTranscribeText: {
+    color: '#161414',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pdfEmptyState: {
+    height: 120,
+    backgroundColor: '#161414',
+    borderWidth: 1,
+    borderColor: '#2e2a2a',
+    borderStyle: 'dashed',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  pdfEmptyText: {
+    color: '#a8a29e',
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });
