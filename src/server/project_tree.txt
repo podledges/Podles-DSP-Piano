@@ -1,0 +1,82 @@
+server
+
+> broadcast.py
+>
+> > [Class: NoteBroadcaster] (Bidirectional event broadcasting to connected frontend clients)
+> >
+> > register(client_id)
+> > unregister(client_id)
+> > broadcast(note_event)
+> > broadcast_status(msg)
+> > _fan_out(message)
+>
+> ingest.py
+>
+> > [Class: IngestMetrics]
+> > [Class: AudioIngest] (Incoming audio ingestion via WebSockets)
+> >
+> > feed(raw_bytes)
+> > get_metrics()
+> > reset()
+> > _reset_stream_state()
+> > _is_seq_reset(seq)
+>
+> app.py
+>
+> > [Class: NodeJsBridge]
+> >
+> > connect()
+> > send_note(midi, velocity)
+> > close()
+> >
+> > [Class: ServerRuntime]
+> >
+> > feed_pcm(pcm_bytes, sample_index)
+> > start_session(session_id)
+> > stop_session()
+> > poll_events()
+> > record_stream_connect()
+> > health()
+> > _start_session_locked(session_id)
+> >
+> > create_app(transcriber_name, nodejs_uri)
+> > _poll_notes(runtime)
+> > _handle_stream_control_frame(runtime, raw_bytes)
+> > load_transcriber(name) (Pitch transcription pipeline switcher)
+> > _new_session_id()
+> > parse_args(argv)
+> > main(argv)
+>
+> index.js
+>
+> > broadcastJson(data)
+> > broadcastBinary(buffer)
+> > getMidiFromScientificPitch(pitch)
+> > processNoteInput(midiNote) (Real-time score tracking synchronization)
+> > getMockTranscription(fileName, pageNum) (REST endpoints for PDF sheet music parsing)
+>
+> package.json
+> package-lock.json
+> requirements.txt
+>
+> static
+>
+> > index.html
+>
+> transcriber (Pitch transcription using Spotify's basic_pitch ML model or mock generator)
+>
+> > __init__.py
+> > base.py
+> > basic_pitch.py (Spotify's basic_pitch ML model implementation)
+> > fake.py (Mock generator implementation)
+>
+> tests
+>
+> > __init__.py
+> > test_basic_pitch.py
+> > test_ingest.py
+> > test_transcriber.py
+>
+> node_modules
+>
+> > [Dependencies Condensed]

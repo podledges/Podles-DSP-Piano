@@ -1,0 +1,4 @@
+src
+> scripts
+> > build_final_bar_matching_browser_bundle.js
+> > > bundleFinalBarMatching() (Dependency bundling and script assembly pipeline)

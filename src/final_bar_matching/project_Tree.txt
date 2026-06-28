@@ -1,0 +1,71 @@
+final_bar_matching
+> chord_compare.js
+> > normaliseMidiSet(notes)
+> > extractMidiArray(value)
+> > compareChordSets(expectedInput, observedInput, options) (Chord similarity comparisons)
+>
+> final_bar_matcher.js
+> > [Class: FinalBarMatcher] (End-of-measure detection)
+> > > constructor(scoreNotes, options)
+> > > reset()
+> > > acceptObservedEvent(observedInput)
+> > > calculateConfidence()
+> > > createFinalBarMatcher(scoreNotes, options)
+>
+> frequency_event_adapter.js
+> > isFiniteNumber(value)
+> > validatePacketShell(packet)
+> > normaliseFrequencyEvent(packet, options) (Stream ingestion)
+>
+> frequency_to_midi.js
+> > isFinitePositiveNumber(value)
+> > frequencyHzToMidiFloat(frequencyHz)
+> > frequencyHzToMidi(frequencyHz, options) (Acoustic frequency-to-MIDI conversions)
+> > frequencyHzToMidiDetails(frequencyHz, options)
+>
+> full_score_progress_tracker.js
+> > isObject(value)
+> > isFiniteNumber(value)
+> > normaliseObservedEvent(event)
+> > flattenScore(score)
+> > validateScore(score)
+> > [Class: FullScoreProgressTracker] (Automated page-turn state tracking)
+> > > constructor(normalizedScore, options)
+> > > reset()
+> > > getCurrentFlatEvent()
+> > > getProgress(reason, extra)
+> > > calculateConfidence()
+> > > resetProgress(reason)
+> > > acceptObservedEvent(observedInput)
+> > > findBestMatch(observed)
+> > > acceptMatch(match, observed)
+> > > collectBoundaryEvents(previousIndex, nextIndex, timestampMs)
+> > > findCurrentBarStartIndex()
+> > > findCurrentPageStartIndex()
+> > > findBarEndIndex(barId)
+> > > findPageEndIndex(pageId)
+> > > createFullScoreProgressTracker(normalizedScore, options)
+>
+> PROVISIONAL_SCORE_CONTRACT.md (Data schema specifications for parsed sheet music)
+>
+> score_normalizer.js
+> > isObject(value)
+> > isFiniteNumber(value)
+> > parseNoteNameToMidi(noteName)
+> > normaliseMidiFromNote(note)
+> > makeGeneratedId(...parts)
+> > sourceCopy(value)
+> > normaliseNote(note, context, warnings)
+> > normaliseExplicitEvent(event, context, warnings)
+> > normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTolerance)
+> > normaliseBar(bar, context, warnings, options)
+> > normalisePage(page, context, warnings, options)
+> > normaliseDraftFullScore(input, options) (JSON score structural normalization)
+>
+> score_preprocessor.js
+> > isFiniteNumber(value)
+> > normaliseMidi(value)
+> > parseScoreNotes(input, options) (Timestamp grouping)
+>
+> simulator_browser_bundle.js (Standalone client test harness bundle)
+> > bundleSimulator()

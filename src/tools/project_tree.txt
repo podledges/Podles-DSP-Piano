@@ -1,0 +1,57 @@
+tools
+> generate_fixtures.py
+> > generate_chord(sample_rate, duration)
+> > write_wav(path)
+> > write_midi(path)
+> > main()
+>
+> latency_harness.py
+>
+> > [Class: ExpectedOnset]
+> >
+> > read_wav(path)
+> > read_expected_onsets(path, sample_rate)
+> > iter_audio_frames(samples, sample_rate)
+> > parse_note_event(raw)
+> > listen_for_notes(notes_uri, expected, sent_onsets, measurements, ready, done)
+> > stream_wav_realtime(stream_uri, samples, sample_rate, expected, sent_onsets)
+> > run_once(stream_uri, notes_uri, samples, sample_rate, expected)
+> > summarize(latencies_ms)
+> > run_harness(args)
+> > parse_args()
+> > main()
+>
+> start.py
+>
+> > find_server_entry()
+> > poll_health(port, timeout)
+> > main()
+> > > shutdown(sig, frame)
+>
+> stream_synthetic.py
+>
+> > read_wav(path)
+> > generate_tone(frequency_hz, duration_seconds, sample_rate)
+> > iter_audio_frames(samples, sample_rate)
+> > stream_audio(uri, samples, sample_rate, realtime)
+> > parse_args()
+> > load_audio(args)
+> > main()
+>
+> check_golden.py
+>
+> > [Class: NoteTuple]
+> >
+> > read_wav(path)
+> > read_reference_notes(path)
+> > iter_audio_frames(samples, sample_rate)
+> > parse_note_event(raw)
+> > collect_note_on_events(notes_uri, detected, ready)
+> > stream_wav(stream_uri, samples, sample_rate)
+> > collect_detections(stream_uri, notes_uri, wav_path)
+> > notes_to_mir_eval(notes)
+> > find_missed_and_spurious(reference, detected)
+> > format_notes(notes)
+> > score(reference, detected)
+> > parse_args()
+> > main()

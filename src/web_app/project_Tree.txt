@@ -1,0 +1,115 @@
+web_app
+> index.html
+> style.css
+> app.js
+> > loadMidiParser()
+> > addLog(message, type)
+> > updateJsonPanel()
+> > getNoteName(midiNumber)
+> > isBlackKey(midiNumber)
+> > buildKeyboard()
+> > initAudio()
+> > midiToFreq(midiNumber)
+> > synthNoteOn(midiNumber)
+> > synthNoteOff(midiNumber)
+> > triggerLocalNoteOn(midi)
+> > triggerLocalNoteOff(midi)
+> > highlightKey(midi, style)
+> > removeKeyHighlight(midi)
+> > handlePdfSelection(file)
+> > renderPdfPage(pageNum)
+> > showOverlay(text)
+> > hideOverlay()
+> > callGeminiTranscriptionForCurrentPage(apiKey)
+> > getMockPageData(pageNum)
+> > flattenPages()
+> > parseNoteToMidi(noteName)
+> > processParsedNotes(notesList)
+> > startPlayback()
+> > pausePlayback()
+> > stopPlayback()
+> > resizeWaterfall()
+> > drawWaterfall()
+> > sendMidiToESP32(status, note, velocity)
+>
+> final_bar_matching.browser.js
+>
+> > [Module 0: score_normalizer.js]
+> >
+> > > isObject(value)
+> > > isFiniteNumber(value)
+> > > parseNoteNameToMidi(noteName)
+> > > normaliseMidiFromNote(note)
+> > > makeGeneratedId(...parts)
+> > > sourceCopy(value)
+> > > normaliseNote(note, context, warnings)
+> > > normaliseExplicitEvent(event, context, warnings)
+> > > normaliseEventsFromIndividualNotes(notes, context, warnings, groupingTolerance)
+> > > normaliseBar(bar, context, warnings, options)
+> > > normalisePage(page, context, warnings, options)
+> > > normaliseDraftFullScore(input, options)
+> >
+> > [Module 1: score_preprocessor.js]
+> >
+> > > isFiniteNumber(value)
+> > > normaliseMidi(value)
+> > > parseScoreNotes(input, options)
+> >
+> > [Module 2: frequency_score_pipeline.js]
+> >
+> > > toObservedMidiChordEvent(adapterEvent)
+> > > FrequencyScorePipeline [Class]
+> > >
+> > > > constructor(normalizedScore, options)
+> > > > reset()
+> > > > acceptFrequencyEvent(packet)
+> > > > createFrequencyScorePipeline(normalizedScore, options)
+>
+> > [Module 3: frequency_event_adapter.js]
+> >
+> > > isFiniteNumber(value)
+> > > validatePacketShell(packet)
+> > > normaliseFrequencyEvent(packet, options)
+> >
+> > [Module 4: frequency_to_midi.js]
+> >
+> > > isFinitePositiveNumber(value)
+> > > frequencyHzToMidiFloat(frequencyHz)
+> > > frequencyHzToMidi(frequencyHz, options)
+> > > frequencyHzToMidiDetails(frequencyHz, options)
+> >
+> > [Module 5: full_score_progress_tracker.js]
+> >
+> > > isObject(value)
+> > > isFiniteNumber(value)
+> > > normaliseObservedEvent(event)
+> > > flattenScore(score)
+> > > validateScore(score)
+> > > FullScoreProgressTracker [Class]
+> > >
+> > > > constructor(normalizedScore, options)
+> > > > reset()
+> > > > getCurrentFlatEvent()
+> > > > getProgress(reason, extra)
+> > > > calculateConfidence()
+> > > > resetProgress(reason)
+> > > > acceptObservedEvent(observedInput)
+> > > > findBestMatch(observed)
+> > > > acceptMatch(match, observed)
+> > > > collectBoundaryEvents(previousIndex, nextIndex, timestamp Ms)
+> > > > findCurrentBarStartIndex()
+> > > > findCurrentPageStartIndex()
+> > > > findBarEndIndex(barId)
+> > > > findPageEndIndex(pageId)
+> > >
+> > > createFullScoreProgressTracker(normalizedScore, options)
+> >
+> > [Module 6: chord_compare.js]
+> >
+> > > normaliseMidiSet(notes)
+> > > extractMidiArray(value)
+> > > compareChordSets(expectedInput, observedInput, options)
+
+
+
+THIS folder controls the frontend user interface and client logic for an ESP32-driven DSP piano visualizer. It manages sheet music PDF parsing, optical music recognition (OMR) transcription via Gemini AI, local Web Audio synthesis, falling-note waterfall rendering, and real-time score tracking matching acoustic input to expected sheet music.

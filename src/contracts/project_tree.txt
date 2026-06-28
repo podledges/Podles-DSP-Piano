@@ -1,0 +1,30 @@
+src
+> contracts
+> > audio_stream_v1.c
+> > > audio_stream_v1_write_uint32(buf, val)
+> > > audio_stream_v1_read_uint32(buf)
+> > > audio_stream_v1_encode_hello(out, out_len, session_id)
+> > > audio_stream_v1_encode_audio(out, out_len, seq, sample_index, timestamp_ms, sample_rate, pcm, pcm_len) (Binary audio frame packing and unpacking for streaming over WebSockets)
+> > > audio_stream_v1_encode_goodbye(out, out_len, session_id)
+> > > audio_stream_v1_decode(frame, raw, raw_len)
+> >
+> > audio_stream_v1.h
+> >
+> > audio_stream_v1.py
+> > > [Class: HelloFrame]
+> > > [Class: AudioFrame]
+> > > [Class: GoodbyeFrame]
+> > > encode_hello(session_id)
+> > > encode_audio(seq, sample_index, timestamp_ms, sample_rate, pcm_bytes)
+> > > encode_goodbye(session_id)
+> > > decode(raw_bytes)
+> >
+> > CMakeLists.txt (Native C library compilation)
+> >
+> > note_events_v1.py
+> > > [Class: NoteEventV1] (JSON event schema definitions for pitch notifications)
+> > > > to_dict()
+> > > > to_json()
+> > > > from_json(raw)
+> >
+> > note_events_v1_schema.json

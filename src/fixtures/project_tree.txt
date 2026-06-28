@@ -1,0 +1,3 @@
+fixtures
+> cmaj_chord.mid (Reference MIDI annotations for a C major chord)
+> cmaj_chord.wav (Acoustic WAV recording of a C major chord)

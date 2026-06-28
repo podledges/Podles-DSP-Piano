@@ -1,0 +1,18 @@
+src
+> mobile
+> > AGENTS.md (AI agent onboarding and operational rules)
+> > app.json (Expo native application and build configuration)
+> > App.tsx
+> > > App() (Primary mobile visualizer interface and WebSocket controller)
+> > > CLAUDE.md (Anthropic assistant developer guidelines)
+> > > index.ts (Native application entry point and root registry)
+> > > LICENSE
+> > > package.json
+> > > package-lock.json
+> > > tsconfig.json (TypeScript compiler options)
+> >
+> > assets
+> > > adaptive-icon.png
+> > > favicon.png
+> > > icon.png
+> > > splash-icon.png

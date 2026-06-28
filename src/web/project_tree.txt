@@ -1,0 +1,28 @@
+web
+> .gitignore
+> .oxlintrc
+> index.html (Single-page application HTML entry point)
+> package.json
+> package-lock.json
+> postcss.config.js (PostCSS transformer configuration)
+> README.md
+> tailwind.config.js (Utility-first CSS framework configuration)
+> vite.config.js (Vite bundler and HMR configuration)
+>
+> public
+> > favicon.html
+> > icons.html
+>
+> references_styles
+> > token.css (Design tokens and custom stylesheet references)
+>
+> src
+> > App.tsx (Root React application component)
+> > main.tsx (DOM bootstrap and React root renderer)
+> > vite-env.d.ts (Vite TypeScript type declarations)
+> >
+> > assets
+> > > react.svg
+> >
+> > components
+> > > [Components Condensed]
